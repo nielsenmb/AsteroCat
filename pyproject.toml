@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asterocat"
+version = "0.1.0"
+description = "Asteroseismic catalog browser"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+]
+
+[project.scripts]
+asterocat = "asterocat.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["asterocat*"]
+
+[tool.setuptools.package-data]
+asterocat = ["static/*"]
