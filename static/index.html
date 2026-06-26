@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asteroseismic Catalog</title>
+<style>
+  /* ── tokens ── */
+  :root {
+    --bg:       #0f1117;
+    --surface:  #181c27;
+    --border:   #262c3e;
+    --accent:   #5b8dee;
+    --accent2:  #a78bfa;
+    --text:     #d4daf0;
+    --muted:    #6b7499;
+    --good:     #34d399;
+    --warn:     #fbbf24;
+    --font-mono: 'JetBrains Mono', 'Fira Mono', 'Cascadia Code', monospace;
+    --font-ui:   'Inter', system-ui, sans-serif;
+    --radius:   6px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── header ── */
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--accent);
+    font-family: var(--font-mono);
+  }
+  #db-stats {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+
+  /* ── layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── sidebar ── */
+  aside {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+  }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ID search */
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap input::placeholder { color: var(--muted); }
+
+  /* range inputs */
+  .range-group { display: flex; flex-direction: column; gap: 8px; }
+  .range-row { display: flex; gap: 6px; align-items: center; }
+  .range-row label { width: 32px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .range-row input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 8px;
+    outline: none;
+    min-width: 0;
+  }
+  .range-row input:focus { border-color: var(--accent); }
+
+  /* source checkboxes */
+  #source-list { display: flex; flex-direction: column; gap: 7px; }
+  .source-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .source-item input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
+  .source-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .source-count { margin-left: auto; color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+
+  /* buttons */
+  .btn {
+    padding: 8px 14px;
+    border-radius: var(--radius);
+    border: none;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .btn-row { display: flex; gap: 8px; }
+
+  /* ── main content ── */
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 20px 24px;
+    gap: 12px;
+  }
+
+  /* results meta */
+  .results-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .results-meta .count { color: var(--good); font-weight: 600; }
+
+  /* table wrapper */
+  .table-wrap {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+  }
+
+  thead {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface); }
+
+  td {
+    padding: 8px 14px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  td.id-cell { color: var(--accent); }
+  td.source-cell { color: var(--accent2); }
+  td.null-cell { color: var(--muted); }
+  td.num-cell { text-align: right; }
+
+  /* uncertainty sub */
+  .unc { font-size: 10px; color: var(--muted); }
+
+  /* pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+
+  /* empty / loading states */
+  .state-msg {
+    padding: 60px 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* tag pills for active filters */
+  .filter-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    background: #1e2540;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>asteroseismic catalog</h1>
+  <span id="db-stats">loading…</span>
+</header>
+
+<div class="layout">
+  <aside>
+
+    <!-- ID search -->
+    <div>
+      <div class="panel-title">Target ID</div>
+      <div class="search-wrap">
+        <input id="q-input" type="text" placeholder="TIC_12345  /  KIC_9876  /  12345">
+      </div>
+    </div>
+
+    <!-- numax range -->
+    <div>
+      <div class="panel-title">ν<sub>max</sub> range (μHz)</div>
+      <div class="range-group">
+        <div class="range-row">
+          <label>min</label>
+          <input id="numax-min" type="number" placeholder="e.g. 100" step="any">
+        </div>
+        <div class="range-row">
+          <label>max</label>
+          <input id="numax-max" type="number" placeholder="e.g. 3500" step="any">
+        </div>
+      </div>
+    </div>
+
+    <!-- teff range -->
+    <div>
+      <div class="panel-title">T<sub>eff</sub> range (K)</div>
+      <div class="range-group">
+        <div class="range-row">
+          <label>min</label>
+          <input id="teff-min" type="number" placeholder="e.g. 4000" step="any">
+        </div>
+        <div class="range-row">
+          <label>max</label>
+          <input id="teff-max" type="number" placeholder="e.g. 6500" step="any">
+        </div>
+      </div>
+    </div>
+
+    <!-- sources -->
+    <div>
+      <div class="panel-title">Sources</div>
+      <div id="source-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="search-btn">Search</button>
+      <button class="btn btn-ghost"   id="reset-btn">Reset</button>
+    </div>
+
+  </aside>
+
+  <main>
+    <div class="results-meta">
+      <span id="result-count" class="count">—</span>
+      <span id="result-label">results</span>
+      <span id="active-filters" class="filter-tags"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Catalog ID</th>
+            <th>Source</th>
+            <th>Mission</th>
+            <th style="text-align:right">ν<sub>max</sub> (μHz)</th>
+            <th style="text-align:right">e_ν<sub>max</sub></th>
+            <th style="text-align:right">T<sub>eff</sub> (K)</th>
+            <th style="text-align:right">e_T<sub>eff</sub></th>
+          </tr>
+        </thead>
+        <tbody id="results-body">
+          <tr><td colspan="7" class="state-msg">Run a search to load results.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button class="btn btn-ghost" id="prev-btn" disabled>← prev</button>
+      <span id="page-info">page 1</span>
+      <button class="btn btn-ghost" id="next-btn" disabled>next →</button>
+      <span id="page-total"></span>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── palette for source dots ──────────────────────────────────────────────────
+const COLORS = [
+  '#5b8dee','#a78bfa','#34d399','#fbbf24',
+  '#f87171','#38bdf8','#fb923c','#e879f9',
+];
+let sourceColorMap = {};
+
+// ── state ────────────────────────────────────────────────────────────────────
+let state = { offset: 0, limit: 200, total: 0 };
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const fmt = (v, dp=2) => v == null ? null : (+v).toFixed(dp);
+
+function fmtCell(val, dp=2) {
+  if (val == null) return `<td class="num-cell null-cell">—</td>`;
+  return `<td class="num-cell">${(+val).toFixed(dp)}</td>`;
+}
+
+// ── load sources on startup ──────────────────────────────────────────────────
+async function loadSources() {
+  const res  = await fetch('/api/sources');
+  const data = await res.json();
+
+  // build color map
+  data.forEach((s, i) => { sourceColorMap[s.source] = COLORS[i % COLORS.length]; });
+
+  // stats header
+  const total = data.reduce((a, s) => a + s.n, 0);
+  $('db-stats').textContent =
+    `${data.length} sources · ${total.toLocaleString()} rows`;
+
+  // checkboxes
+  const list = $('source-list');
+  list.innerHTML = data.map(s => `
+    <label class="source-item">
+      <input type="checkbox" name="source" value="${s.source}" checked>
+      <span class="source-dot" style="background:${sourceColorMap[s.source]}"></span>
+      <span>${s.source}</span>
+      <span class="source-count">${s.n.toLocaleString()}</span>
+    </label>
+  `).join('');
+}
+
+// ── build query params ───────────────────────────────────────────────────────
+function buildParams(offset=0) {
+  const p = new URLSearchParams();
+
+  const q = $('q-input').value.trim();
+  if (q) p.set('q', q);
+
+  const checked = [...document.querySelectorAll('input[name=source]:checked')]
+                    .map(el => el.value);
+  const all     = [...document.querySelectorAll('input[name=source]')]
+                    .map(el => el.value);
+  // only send if not all selected (saves URL length)
+  if (checked.length && checked.length < all.length)
+    p.set('source', checked.join(','));
+
+  const numaxMin = $('numax-min').value;
+  const numaxMax = $('numax-max').value;
+  const teffMin  = $('teff-min').value;
+  const teffMax  = $('teff-max').value;
+  if (numaxMin) p.set('numax_min', numaxMin);
+  if (numaxMax) p.set('numax_max', numaxMax);
+  if (teffMin)  p.set('teff_min',  teffMin);
+  if (teffMax)  p.set('teff_max',  teffMax);
+
+  p.set('limit',  state.limit);
+  p.set('offset', offset);
+  return p;
+}
+
+// ── render results ───────────────────────────────────────────────────────────
+function renderResults(data) {
+  state.total  = data.total;
+  state.offset = data.offset;
+
+  // count / pagination
+  const page   = Math.floor(data.offset / state.limit) + 1;
+  const pages  = Math.ceil(data.total / state.limit);
+  $('result-count').textContent = data.total.toLocaleString();
+  $('result-label').textContent = data.total === 1 ? 'result' : 'results';
+  $('page-info').textContent    = `page ${page} of ${pages || 1}`;
+  $('page-total').textContent   = '';
+  $('prev-btn').disabled        = data.offset === 0;
+  $('next-btn').disabled        = data.offset + state.limit >= data.total;
+
+  const body = $('results-body');
+  if (!data.results.length) {
+    body.innerHTML = `<tr><td colspan="7" class="state-msg">No results.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = data.results.map(r => {
+    const color = sourceColorMap[r.source] || '#888';
+    return `<tr>
+      <td class="id-cell">${r.catalog_id}</td>
+      <td class="source-cell">
+        <span class="source-dot" style="background:${color};display:inline-block;
+              width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}
+      </td>
+      <td>${r.mission}</td>
+      ${fmtCell(r.numax, 2)}
+      ${fmtCell(r.e_numax, 3)}
+      ${fmtCell(r.teff, 1)}
+      ${fmtCell(r.e_teff, 1)}
+    </tr>`;
+  }).join('');
+}
+
+// ── active filter tags ───────────────────────────────────────────────────────
+function updateFilterTags() {
+  const tags = [];
+  const q = $('q-input').value.trim();
+  if (q) tags.push(`id: ${q}`);
+  if ($('numax-min').value || $('numax-max').value)
+    tags.push(`νmax: ${$('numax-min').value||'*'} – ${$('numax-max').value||'*'}`);
+  if ($('teff-min').value || $('teff-max').value)
+    tags.push(`Teff: ${$('teff-min').value||'*'} – ${$('teff-max').value||'*'}`);
+  const checked = [...document.querySelectorAll('input[name=source]:checked')].length;
+  const all     = [...document.querySelectorAll('input[name=source]')].length;
+  if (checked < all) tags.push(`sources: ${checked}/${all}`);
+  $('active-filters').innerHTML = tags.map(t => `<span class="tag">${t}</span>`).join('');
+}
+
+// ── search ───────────────────────────────────────────────────────────────────
+async function doSearch(offset=0) {
+  updateFilterTags();
+  $('results-body').innerHTML = `<tr><td colspan="7" class="state-msg">Searching…</td></tr>`;
+  const params = buildParams(offset);
+  const res    = await fetch(`/api/search?${params}`);
+  const data   = await res.json();
+  renderResults(data);
+}
+
+// ── events ───────────────────────────────────────────────────────────────────
+$('search-btn').addEventListener('click', () => doSearch(0));
+
+$('q-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch(0);
+});
+
+$('reset-btn').addEventListener('click', () => {
+  $('q-input').value = '';
+  $('numax-min').value = $('numax-max').value = '';
+  $('teff-min').value  = $('teff-max').value  = '';
+  document.querySelectorAll('input[name=source]').forEach(el => el.checked = true);
+  $('active-filters').innerHTML = '';
+  $('results-body').innerHTML = `<tr><td colspan="7" class="state-msg">Run a search to load results.</td></tr>`;
+  $('result-count').textContent = '—';
+});
+
+$('prev-btn').addEventListener('click', () => doSearch(state.offset - state.limit));
+$('next-btn').addEventListener('click', () => doSearch(state.offset + state.limit));
+
+// ── init ─────────────────────────────────────────────────────────────────────
+loadSources();
+</script>
+</body>
+</html>
