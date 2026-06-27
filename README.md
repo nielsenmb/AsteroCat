@@ -4,18 +4,20 @@ A local browser-based tool for aggregating, cross-matching, and searching astero
 
 ## Installation
 
-Requires Python ≥ 3.10.
+Requires Python ≥ 3.10. We recommend using [uv](https://github.com/astral-sh/uv) for environment management.
 
 ```bash
 git clone https://github.com/nielsenmb/AsteroCat.git
 cd AsteroCat
-pip install -e .
+uv venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+uv pip install -e .
 ```
 
-This installs the `asterocat` command and the Flask server. You'll also need `astroquery` and `numpy` for the build scripts:
+Or with plain pip:
 
 ```bash
-pip install astroquery numpy astropy
+pip install -e .
 ```
 
 ## Workflow
