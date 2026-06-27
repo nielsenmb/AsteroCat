@@ -11,9 +11,12 @@ build/
 venv/
 env/
 
-# AsteroCat runtime files
+# AsteroCat runtime files (generated locally, not committed)
 catalog.db
 sources/*.json
+build.log
+
+# overrides.csv IS committed (manual corrections should be tracked)
 
 # Jupyter
 .ipynb_checkpoints/

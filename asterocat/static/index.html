@@ -328,7 +328,7 @@
       <table>
         <thead>
           <tr>
-            <th>Catalog ID</th>
+            <th>ACAT ID</th><th>Catalog ID</th>
             <th>Source</th>
             <th>Mission</th>
             <th style="text-align:right">ν<sub>max</sub> (μHz)</th>
@@ -338,7 +338,7 @@
           </tr>
         </thead>
         <tbody id="results-body">
-          <tr><td colspan="7" class="state-msg">Run a search to load results.</td></tr>
+          <tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>
         </tbody>
       </table>
     </div>
@@ -443,7 +443,7 @@ function renderResults(data) {
 
   const body = $('results-body');
   if (!data.results.length) {
-    body.innerHTML = `<tr><td colspan="7" class="state-msg">No results.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="state-msg">No results.</td></tr>`;
     return;
   }
 
@@ -482,7 +482,7 @@ function updateFilterTags() {
 // ── search ───────────────────────────────────────────────────────────────────
 async function doSearch(offset=0) {
   updateFilterTags();
-  $('results-body').innerHTML = `<tr><td colspan="7" class="state-msg">Searching…</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Searching…</td></tr>`;
   const params = buildParams(offset);
   const res    = await fetch(`/api/search?${params}`);
   const data   = await res.json();
@@ -502,7 +502,7 @@ $('reset-btn').addEventListener('click', () => {
   $('teff-min').value  = $('teff-max').value  = '';
   document.querySelectorAll('input[name=source]').forEach(el => el.checked = true);
   $('active-filters').innerHTML = '';
-  $('results-body').innerHTML = `<tr><td colspan="7" class="state-msg">Run a search to load results.</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>`;
   $('result-count').textContent = '—';
 });
 

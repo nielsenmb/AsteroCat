@@ -114,10 +114,10 @@ def api_search():
     ).fetchone()[0]
 
     rows = db.execute(
-        f"SELECT catalog_id, resolved_id, mission, mission_id, source,"
+        f"SELECT acat_id, catalog_id, mission, mission_id, source,"
         f"       numax, e_numax, teff, e_teff "
         f"FROM targets {where} "
-        f"ORDER BY catalog_id, source "
+        f"ORDER BY acat_id, catalog_id, source "
         f"LIMIT ? OFFSET ?",
         params + [limit, offset],
     ).fetchall()
