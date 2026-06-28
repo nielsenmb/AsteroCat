@@ -110,38 +110,65 @@ def resolve_via_mast(
     """
     Query MAST TIC v8 for KIC or EPIC IDs and return {mission_id: tic_id}.
     TIC targets resolve to themselves.
+
+    Notes:
+        - KIC: queried via the TIC 'KIC' column (direct filter).
+        - EPIC: the TIC does not expose an 'EPIC' filter column. Instead we
+          query by target_name using the 'ktwo{:09d}' prefix that MAST uses
+          internally for K2 targets, one at a time (no batch support).
+          This is slow for large EPIC samples; consider a CasJobs 2MASS bridge
+          for catalogs with >~500 EPIC targets.
     """
     if mission == "TIC":
         return {mid: mid for mid in mission_ids}
 
-    col = {"KIC": "KIC", "EPIC": "EPIC"}.get(mission)
-    if col is None:
-        return {}
-
-    result = {}
-    n_batches = -(-len(mission_ids) // MAST_BATCH)
-    for i, chunk in enumerate(_chunks(mission_ids, MAST_BATCH)):
-        log.info(f"  MAST {mission} batch {i+1}/{n_batches} ({len(chunk)} IDs)...")
-        try:
-            t = Catalogs.query_criteria(catalog="Tic", **{col: chunk})
-            if t is None or len(t) == 0:
-                continue
-            for row in t:
-                try:
-                    mid = int(row[col])
-                    tic = int(row["ID"])
-                    if mid in result and result[mid] != tic:
-                        log.warning(
-                            f"CONFLICT: {mission}_{mid} matches multiple TIC IDs "
-                            f"({result[mid]}, {tic}) — skipping"
-                        )
-                        result[mid] = None   # mark as conflicted
-                    else:
-                        result[mid] = tic
-                except (ValueError, TypeError):
+    if mission == "KIC":
+        result = {}
+        n_batches = -(-len(mission_ids) // MAST_BATCH)
+        for i, chunk in enumerate(_chunks(mission_ids, MAST_BATCH)):
+            log.info(f"  MAST KIC batch {i+1}/{n_batches} ({len(chunk)} IDs)...")
+            try:
+                t = Catalogs.query_criteria(catalog="Tic", KIC=chunk)
+                if t is None or len(t) == 0:
                     continue
-        except Exception as exc:
-            log.error(f"  MAST batch {i+1} failed: {exc}")
+                for row in t:
+                    try:
+                        mid = int(row["KIC"])
+                        tic = int(row["ID"])
+                        if mid in result and result[mid] != tic:
+                            log.warning(
+                                f"CONFLICT: KIC_{mid} matches multiple TIC IDs "
+                                f"({result[mid]}, {tic}) — skipping"
+                            )
+                            result[mid] = None
+                        else:
+                            result[mid] = tic
+                    except (ValueError, TypeError):
+                        continue
+            except Exception as exc:
+                log.error(f"  MAST KIC batch {i+1} failed: {exc}")
+        return result
+
+    if mission == "EPIC":
+        # MAST TIC has no EPIC filter column; query by ktwo target name instead.
+        log.info(f"  MAST EPIC: querying {len(mission_ids)} IDs by target name (slow)...")
+        result = {}
+        for mid in mission_ids:
+            target_name = f"ktwo{mid:09d}"
+            try:
+                t = Catalogs.query_object(target_name, catalog="TIC", radius=0.0003)
+                if t is None or len(t) == 0:
+                    log.warning(f"UNRESOLVED: EPIC_{mid} — no TIC match for {target_name}")
+                    result[mid] = None
+                else:
+                    tic = int(t["ID"][0])
+                    result[mid] = tic
+            except Exception as exc:
+                log.error(f"  MAST EPIC query failed for {target_name}: {exc}")
+                result[mid] = None
+        return result
+
+    return {}
 
     return result
 
