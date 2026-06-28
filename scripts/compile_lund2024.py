@@ -28,7 +28,7 @@ def main():
 
     numax = df["Numax"].values.astype(float)
     teff  = df["Teff"].values.astype(float)
-    epic  = df["ID"].values.astype(str)
+    epic = df["ID"].str.replace(r"[A-Za-z]", "", regex=True).values.astype(int)
 
     e_numax = df["e_Numax"].values.astype(float) if "e_Numax" in df.columns else np.full(len(df), np.nan)
     e_teff  = df["e_Teff"].values.astype(float)  if "e_Teff"  in df.columns else np.full(len(df), np.nan)
@@ -39,7 +39,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": str(epic[i]),
+            "mission_id": int(epic[i]),
             "numax":      float(numax[i]),
             "e_numax":    float(e_numax[i]) if np.isfinite(e_numax[i]) else None,
             "teff":       float(teff[i]),
