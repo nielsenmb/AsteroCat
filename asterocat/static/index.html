@@ -276,7 +276,7 @@
 
     <!-- numax range -->
     <div>
-      <div class="panel-title">ν<sub>max</sub> range (μHz)</div>
+      <div class="panel-title">numax range (muHz)</div>
       <div class="range-group">
         <div class="range-row">
           <label>min</label>
@@ -291,7 +291,7 @@
 
     <!-- teff range -->
     <div>
-      <div class="panel-title">T<sub>eff</sub> range (K)</div>
+      <div class="panel-title">Teff range (K)</div>
       <div class="range-group">
         <div class="range-row">
           <label>min</label>
@@ -322,6 +322,7 @@
       <span id="result-count" class="count">—</span>
       <span id="result-label">results</span>
       <span id="active-filters" class="filter-tags"></span>
+      <button class="btn btn-ghost" id="export-btn" style="margin-left:auto" disabled>Export CSV</button>
     </div>
 
     <div class="table-wrap">
@@ -331,10 +332,10 @@
             <th>ACAT ID</th><th>Catalog ID</th>
             <th>Source</th>
             <th>Mission</th>
-            <th style="text-align:right">ν<sub>max</sub> (μHz)</th>
-            <th style="text-align:right">e_ν<sub>max</sub></th>
-            <th style="text-align:right">T<sub>eff</sub> (K)</th>
-            <th style="text-align:right">e_T<sub>eff</sub></th>
+            <th style="text-align:right">numax (muHz)</th>
+            <th style="text-align:right">e_numax (muHz)</th>
+            <th style="text-align:right">Teff (K)</th>
+            <th style="text-align:right">e_Teff (K)</th>
           </tr>
         </thead>
         <tbody id="results-body">
@@ -440,6 +441,7 @@ function renderResults(data) {
   $('page-total').textContent   = '';
   $('prev-btn').disabled        = data.offset === 0;
   $('next-btn').disabled        = data.offset + state.limit >= data.total;
+  $('export-btn').disabled      = data.total === 0;
 
   const body = $('results-body');
   if (!data.results.length) {
@@ -450,6 +452,7 @@ function renderResults(data) {
   body.innerHTML = data.results.map(r => {
     const color = sourceColorMap[r.source] || '#888';
     return `<tr>
+      <td class="id-cell">${r.acat_id ?? '—'}</td>
       <td class="id-cell">${r.catalog_id}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
@@ -470,7 +473,7 @@ function updateFilterTags() {
   const q = $('q-input').value.trim();
   if (q) tags.push(`id: ${q}`);
   if ($('numax-min').value || $('numax-max').value)
-    tags.push(`νmax: ${$('numax-min').value||'*'} – ${$('numax-max').value||'*'}`);
+    tags.push(`numax: ${$('numax-min').value||'*'} – ${$('numax-max').value||'*'}`);
   if ($('teff-min').value || $('teff-max').value)
     tags.push(`Teff: ${$('teff-min').value||'*'} – ${$('teff-max').value||'*'}`);
   const checked = [...document.querySelectorAll('input[name=source]:checked')].length;
@@ -508,6 +511,32 @@ $('reset-btn').addEventListener('click', () => {
 
 $('prev-btn').addEventListener('click', () => doSearch(state.offset - state.limit));
 $('next-btn').addEventListener('click', () => doSearch(state.offset + state.limit));
+
+// ── export ───────────────────────────────────────────────────────────────────
+async function exportCSV() {
+  // Fetch all results (no limit) using current filters
+  const params = buildParams(0);
+  params.set('limit', 100000);
+  const res  = await fetch(`/api/search?${params}`);
+  const data = await res.json();
+
+  const cols = ['acat_id','catalog_id','mission','mission_id','source',
+                'numax','e_numax','teff','e_teff'];
+  const header = cols.join(',');
+  const rows = data.results.map(r =>
+    cols.map(c => r[c] == null ? '' : r[c]).join(',')
+  );
+  const csv  = [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'asterocat_results.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+$('export-btn').addEventListener('click', exportCSV);
 
 // ── init ─────────────────────────────────────────────────────────────────────
 loadSources();
