@@ -24,8 +24,8 @@ from astroquery.mast import Catalogs
 
 warnings.filterwarnings("ignore")
 
-CATALOG_DAT = Path("hatt2023/catalog.dat")
-README      = Path("hatt2023/ReadMe.txt")
+CATALOG_DAT = Path("sources/hatt2023/catalog.dat")
+README      = Path("sources/hatt2023/ReadMe.txt")
 OUTPUT      = Path("sources/hatt2023.json")
 BATCH       = 1000
 
