@@ -23,7 +23,10 @@ SCRIPTS_DIR = Path(__file__).parent
 
 # Ordered list of compile scripts. Add new sources here.
 COMPILE_SCRIPTS = [
+    "compile_yu2018.py",
     "compile_hatt2023.py",
+    "compile_hon2021.py",
+    "compile_hon2022.py",
     "compile_sayeed2024.py",
     "compile_karim2025.py",
     "compile_lund2024.py",
