@@ -254,6 +254,37 @@
     font-family: var(--font-mono);
     color: var(--accent);
   }
+
+  /* ── collapsible sections ── */
+  .collapsible { display: flex; flex-direction: column; gap: 0; }
+  .collapse-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0 0 10px 0;
+    width: 100%;
+    font-family: var(--font-ui);
+  }
+  .collapse-toggle:hover { color: var(--text); }
+  .chevron { font-size: 10px; transition: transform .2s; }
+  .collapse-toggle[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
+  .collapse-body { overflow: hidden; }
+  .collapse-body.hidden { display: none; }
+
+  /* ── sortable headers ── */
+  thead th { cursor: pointer; }
+  thead th:hover { color: var(--text); }
+  thead th .sort-icon { margin-left: 4px; opacity: 0.3; font-style: normal; }
+  thead th.sort-asc .sort-icon,
+  thead th.sort-desc .sort-icon { opacity: 1; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -275,39 +306,61 @@
     </div>
 
     <!-- numax range -->
-    <div>
-      <div class="panel-title">numax range (muHz)</div>
-      <div class="range-group">
-        <div class="range-row">
-          <label>min</label>
-          <input id="numax-min" type="number" placeholder="e.g. 100" step="any">
-        </div>
-        <div class="range-row">
-          <label>max</label>
-          <input id="numax-max" type="number" placeholder="e.g. 3500" step="any">
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>numax range (muHz)</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div class="range-group">
+          <div class="range-row">
+            <label>min</label>
+            <input id="numax-min" type="number" placeholder="e.g. 100" step="any">
+          </div>
+          <div class="range-row">
+            <label>max</label>
+            <input id="numax-max" type="number" placeholder="e.g. 3500" step="any">
+          </div>
         </div>
       </div>
     </div>
 
     <!-- teff range -->
-    <div>
-      <div class="panel-title">Teff range (K)</div>
-      <div class="range-group">
-        <div class="range-row">
-          <label>min</label>
-          <input id="teff-min" type="number" placeholder="e.g. 4000" step="any">
-        </div>
-        <div class="range-row">
-          <label>max</label>
-          <input id="teff-max" type="number" placeholder="e.g. 6500" step="any">
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>Teff range (K)</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div class="range-group">
+          <div class="range-row">
+            <label>min</label>
+            <input id="teff-min" type="number" placeholder="e.g. 4000" step="any">
+          </div>
+          <div class="range-row">
+            <label>max</label>
+            <input id="teff-max" type="number" placeholder="e.g. 6500" step="any">
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- instrument filter -->
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>Instrument</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div id="instrument-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
+      </div>
+    </div>
+
     <!-- sources -->
-    <div>
-      <div class="panel-title">Sources</div>
-      <div id="source-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>Sources</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div id="source-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
+      </div>
     </div>
 
     <div class="btn-row">
@@ -329,13 +382,14 @@
       <table>
         <thead>
           <tr>
-            <th>ACAT ID</th><th>Catalog ID</th>
-            <th>Source</th>
-            <th>Mission</th>
-            <th style="text-align:right">numax (muHz)</th>
-            <th style="text-align:right">e_numax (muHz)</th>
-            <th style="text-align:right">Teff (K)</th>
-            <th style="text-align:right">e_Teff (K)</th>
+            <th data-col="acat_id">ACAT ID<i class="sort-icon">⬍</i></th>
+            <th data-col="catalog_id">Catalog ID<i class="sort-icon">⬍</i></th>
+            <th data-col="source">Source<i class="sort-icon">⬍</i></th>
+            <th data-col="instrument">Instrument<i class="sort-icon">⬍</i></th>
+            <th data-col="numax" style="text-align:right">numax (muHz)<i class="sort-icon">⬍</i></th>
+            <th data-col="e_numax" style="text-align:right">e_numax (muHz)<i class="sort-icon">⬍</i></th>
+            <th data-col="teff" style="text-align:right">Teff (K)<i class="sort-icon">⬍</i></th>
+            <th data-col="e_teff" style="text-align:right">e_Teff (K)<i class="sort-icon">⬍</i></th>
           </tr>
         </thead>
         <tbody id="results-body">
@@ -361,6 +415,9 @@ const COLORS = [
 ];
 let sourceColorMap = {};
 
+
+// ── instrument is now a DB column, passed directly from API ─────────────────
+function instrument(r) { return r.instrument || r.mission; }
 // ── state ────────────────────────────────────────────────────────────────────
 let state = { offset: 0, limit: 200, total: 0 };
 
@@ -371,6 +428,29 @@ const fmt = (v, dp=2) => v == null ? null : (+v).toFixed(dp);
 function fmtCell(val, dp=2) {
   if (val == null) return `<td class="num-cell null-cell">—</td>`;
   return `<td class="num-cell">${(+val).toFixed(dp)}</td>`;
+}
+
+// ── collapsible sections ─────────────────────────────────────────────────────
+function toggleSection(btn) {
+  const expanded = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', !expanded);
+  btn.nextElementSibling.classList.toggle('hidden', expanded);
+}
+
+// ── sort state ───────────────────────────────────────────────────────────────
+let sortCol = null;
+let sortDir = 1; // 1 = asc, -1 = desc
+
+function updateSortHeaders() {
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = '⬍';
+    if (th.dataset.col === sortCol) {
+      th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+      if (icon) icon.textContent = sortDir === 1 ? '▲' : '▼';
+    }
+  });
 }
 
 // ── load sources on startup ──────────────────────────────────────────────────
@@ -386,7 +466,7 @@ async function loadSources() {
   $('db-stats').textContent =
     `${data.length} sources · ${total.toLocaleString()} rows`;
 
-  // checkboxes
+  // source checkboxes
   const list = $('source-list');
   list.innerHTML = data.map(s => `
     <label class="source-item">
@@ -394,6 +474,20 @@ async function loadSources() {
       <span class="source-dot" style="background:${sourceColorMap[s.source]}"></span>
       <span>${s.source}</span>
       <span class="source-count">${s.n.toLocaleString()}</span>
+    </label>
+  `).join('');
+
+  // instrument checkboxes — derive unique instruments from sources
+  const instrumentCounts = {};
+  data.forEach(s => {
+    instrumentCounts[s.instrument] = (instrumentCounts[s.instrument] || 0) + s.n;
+  });
+  const ilist = $('instrument-list');
+  ilist.innerHTML = Object.entries(instrumentCounts).sort().map(([inst, n]) => `
+    <label class="source-item">
+      <input type="checkbox" name="instrument" value="${inst}" checked>
+      <span>${inst}</span>
+      <span class="source-count">${n.toLocaleString()}</span>
     </label>
   `).join('');
 }
@@ -409,9 +503,15 @@ function buildParams(offset=0) {
                     .map(el => el.value);
   const all     = [...document.querySelectorAll('input[name=source]')]
                     .map(el => el.value);
-  // only send if not all selected (saves URL length)
   if (checked.length && checked.length < all.length)
     p.set('source', checked.join(','));
+
+  const checkedInst = [...document.querySelectorAll('input[name=instrument]:checked')]
+                        .map(el => el.value);
+  const allInst     = [...document.querySelectorAll('input[name=instrument]')]
+                        .map(el => el.value);
+  if (checkedInst.length && checkedInst.length < allInst.length)
+    p.set('instrument', checkedInst.join(','));
 
   const numaxMin = $('numax-min').value;
   const numaxMax = $('numax-max').value;
@@ -424,6 +524,11 @@ function buildParams(offset=0) {
 
   p.set('limit',  state.limit);
   p.set('offset', offset);
+  if (sortCol) {
+    // instrument sorts by mission (1-to-1 mapping, same order)
+    p.set('sort_col', sortCol);
+    p.set('sort_dir', sortDir === 1 ? 'asc' : 'desc');
+  }
   return p;
 }
 
@@ -453,12 +558,12 @@ function renderResults(data) {
     const color = sourceColorMap[r.source] || '#888';
     return `<tr>
       <td class="id-cell">${r.acat_id ?? '—'}</td>
-      <td class="id-cell">${r.catalog_id}</td>
+      <td class="id-cell">${r.catalog_id.replace('_', '')}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
               width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}
       </td>
-      <td>${r.mission}</td>
+      <td>${instrument(r)}</td>
       ${fmtCell(r.numax, 2)}
       ${fmtCell(r.e_numax, 3)}
       ${fmtCell(r.teff, 1)}
@@ -479,6 +584,9 @@ function updateFilterTags() {
   const checked = [...document.querySelectorAll('input[name=source]:checked')].length;
   const all     = [...document.querySelectorAll('input[name=source]')].length;
   if (checked < all) tags.push(`sources: ${checked}/${all}`);
+  const checkedI = [...document.querySelectorAll('input[name=instrument]:checked')].length;
+  const allI     = [...document.querySelectorAll('input[name=instrument]')].length;
+  if (checkedI < allI) tags.push(`instruments: ${checkedI}/${allI}`);
   $('active-filters').innerHTML = tags.map(t => `<span class="tag">${t}</span>`).join('');
 }
 
@@ -504,6 +612,7 @@ $('reset-btn').addEventListener('click', () => {
   $('numax-min').value = $('numax-max').value = '';
   $('teff-min').value  = $('teff-max').value  = '';
   document.querySelectorAll('input[name=source]').forEach(el => el.checked = true);
+  document.querySelectorAll('input[name=instrument]').forEach(el => el.checked = true);
   $('active-filters').innerHTML = '';
   $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>`;
   $('result-count').textContent = '—';
@@ -514,19 +623,40 @@ $('next-btn').addEventListener('click', () => doSearch(state.offset + state.limi
 
 // ── export ───────────────────────────────────────────────────────────────────
 async function exportCSV() {
-  // Fetch all results (no limit) using current filters
-  const params = buildParams(0);
-  params.set('limit', 100000);
-  const res  = await fetch(`/api/search?${params}`);
-  const data = await res.json();
+  // Paginate through all results in chunks to bypass the server 1000-row cap
+  const PAGE    = 1000;
+  const cols    = ['acat_id','catalog_id','instrument','source',
+                   'numax','e_numax','teff','e_teff'];
+  const allRows = [];
+  let offset    = 0;
+  let total     = Infinity;
 
-  const cols = ['acat_id','catalog_id','mission','mission_id','source',
-                'numax','e_numax','teff','e_teff'];
-  const header = cols.join(',');
-  const rows = data.results.map(r =>
-    cols.map(c => r[c] == null ? '' : r[c]).join(',')
-  );
-  const csv  = [header, ...rows].join('\n');
+  $('export-btn').textContent = 'Exporting…';
+  $('export-btn').disabled    = true;
+
+  while (offset < total) {
+    const params = buildParams(offset);
+    params.set('limit', PAGE);
+    const res  = await fetch(`/api/search?${params}`);
+    const data = await res.json();
+    total = data.total;
+
+    for (const r of data.results) {
+      allRows.push([
+        r.acat_id  ?? '',
+        (r.catalog_id ?? '').replace('_', ''),
+        instrument(r),
+        r.source   ?? '',
+        r.numax    ?? '',
+        r.e_numax  ?? '',
+        r.teff     ?? '',
+        r.e_teff   ?? '',
+      ].join(','));
+    }
+    offset += PAGE;
+  }
+
+  const csv  = [cols.join(','), ...allRows].join('\n');
   const blob = new Blob([csv], {type: 'text/csv'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -534,10 +664,28 @@ async function exportCSV() {
   a.download = 'asterocat_results.csv';
   a.click();
   URL.revokeObjectURL(url);
+
+  $('export-btn').textContent = 'Export CSV';
+  $('export-btn').disabled    = false;
 }
 
 $('export-btn').addEventListener('click', exportCSV);
 
+
+// ── sort header click ─────────────────────────────────────────────────────────
+document.querySelectorAll('thead th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) {
+      sortDir *= -1;
+    } else {
+      sortCol = col;
+      sortDir = 1;
+    }
+    updateSortHeaders();
+    if (state.total > 0) doSearch(state.offset);
+  });
+});
 // ── init ─────────────────────────────────────────────────────────────────────
 loadSources();
 </script>

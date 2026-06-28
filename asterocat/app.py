@@ -59,8 +59,8 @@ def api_sources():
     """Return list of loaded sources and their row counts."""
     db = get_db()
     rows = db.execute(
-        "SELECT source, mission, COUNT(*) as n "
-        "FROM targets GROUP BY source, mission ORDER BY source"
+        "SELECT source, mission, instrument, COUNT(*) as n "
+        "FROM targets GROUP BY source, mission, instrument ORDER BY source"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -77,17 +77,30 @@ def api_search():
         teff_max   -- float
         limit      -- int (default 200, max 1000)
         offset     -- int (default 0)
+        sort_col   -- column to sort by (default: acat_id)
+        sort_dir   -- 'asc' or 'desc' (default: asc)
     """
     db = get_db()
 
-    q         = request.args.get("q", "").strip()
-    sources   = [s.strip() for s in request.args.get("source", "").split(",") if s.strip()]
+    q            = request.args.get("q", "").strip()
+    sources      = [s.strip() for s in request.args.get("source", "").split(",") if s.strip()]
+    instruments  = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
     numax_min = request.args.get("numax_min", type=float)
     numax_max = request.args.get("numax_max", type=float)
     teff_min  = request.args.get("teff_min",  type=float)
     teff_max  = request.args.get("teff_max",  type=float)
     limit     = min(request.args.get("limit",  default=200, type=int), 1000)
     offset    = request.args.get("offset", default=0, type=int)
+    sort_col  = request.args.get("sort_col", "acat_id")
+    sort_dir  = request.args.get("sort_dir", "asc").lower()
+
+    # Whitelist sortable columns to prevent SQL injection
+    SORTABLE = {"acat_id", "catalog_id", "mission", "instrument", "source",
+                "numax", "e_numax", "teff", "e_teff"}
+    if sort_col not in SORTABLE:
+        sort_col = "acat_id"
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "asc"
 
     clauses, params = [], []
 
@@ -98,6 +111,10 @@ def api_search():
         placeholders = ",".join("?" * len(sources))
         clauses.append(f"source IN ({placeholders})")
         params += sources
+    if instruments:
+        placeholders = ",".join("?" * len(instruments))
+        clauses.append(f"instrument IN ({placeholders})")
+        params += instruments
     if numax_min is not None:
         clauses.append("numax >= ?");  params.append(numax_min)
     if numax_max is not None:
@@ -114,10 +131,10 @@ def api_search():
     ).fetchone()[0]
 
     rows = db.execute(
-        f"SELECT acat_id, catalog_id, mission, mission_id, source,"
+        f"SELECT acat_id, catalog_id, mission, instrument, mission_id, source,"
         f"       numax, e_numax, teff, e_teff "
         f"FROM targets {where} "
-        f"ORDER BY acat_id, catalog_id, source "
+        f"ORDER BY {sort_col} {sort_dir.upper()}, acat_id "
         f"LIMIT ? OFFSET ?",
         params + [limit, offset],
     ).fetchall()
