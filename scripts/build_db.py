@@ -379,13 +379,44 @@ def build(sources_dir: Path, db_path: Path, overrides_path: Path,
             canonical_map[row[0]] = row[0]
 
     # --- assign ACAT IDs ---
-    # Seed the counter past whatever the DB already has, so cached ACAT IDs
-    # aren't reused for new stars.
+    # Pre-populate acat_map from the existing DB so that canonical IDs already
+    # seen in cached sources keep their ACAT IDs. Only genuinely new canonical
+    # IDs get fresh ones, counted up from the current maximum.
+    existing = conn.execute(
+        "SELECT acat_id, catalog_id, mission FROM targets WHERE acat_id IS NOT NULL"
+    ).fetchall()
+
+    # Reconstruct canonical_id → acat_id from cached rows.
+    # canonical_id for a cached row is its resolved TIC/SIMBAD id, but we only
+    # stored the acat_id in the DB — so we infer it from the catalog_id using
+    # the same logic as resolution (TIC/KIC/EPIC rows resolve to TIC_<id>).
+    # For cached sources this is exact since they went through the same pipeline.
+    acat_map: dict[str, str] = {}
+    for row in existing:
+        acat_id, catalog_id, mission = row
+        # Reconstruct what canonical_id would have been for this row
+        # by looking it up in canonical_map if available, else use catalog_id
+        for canonical, aid in acat_map.items():
+            if aid == acat_id:
+                break  # already have this acat_id mapped
+        else:
+            # Find canonical for this catalog_id in our current canonical_map
+            canonical = canonical_map.get(catalog_id)
+            if canonical and canonical not in acat_map:
+                acat_map[canonical] = acat_id
+
     existing_max = conn.execute(
         "SELECT MAX(CAST(SUBSTR(acat_id, 5) AS INTEGER)) FROM targets WHERE acat_id IS NOT NULL"
     ).fetchone()[0] or 0
 
-    acat_map, _ = assign_acat_ids(list(canonical_map.values()), start=existing_max + 1)
+    # Assign fresh IDs only for canonical IDs not already in acat_map
+    counter = existing_max + 1
+    for canonical in canonical_map.values():
+        if canonical is not None and canonical not in acat_map:
+            acat_map[canonical] = ACAT_FMT.format(counter)
+            counter += 1
+
+    log.info(f"Assigned {counter - existing_max - 1} new ACAT IDs ({len(acat_map)} total)")
 
     # --- rebuild targets table ---
     conn.executescript("DROP TABLE IF EXISTS targets;")

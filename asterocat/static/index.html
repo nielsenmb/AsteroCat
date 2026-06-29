@@ -218,6 +218,8 @@
     white-space: nowrap;
   }
   td.id-cell { color: var(--accent); }
+  td.id-cell a { color: inherit; text-decoration: none; }
+  td.id-cell a:hover { text-decoration: underline; }
   td.source-cell { color: var(--accent2); }
   td.null-cell { color: var(--muted); }
   td.num-cell { text-align: right; }
@@ -285,6 +287,60 @@
   thead th .sort-icon { margin-left: 4px; opacity: 0.3; font-style: normal; }
   thead th.sort-asc .sort-icon,
   thead th.sort-desc .sort-icon { opacity: 1; color: var(--accent); }
+
+  /* ── ACAT detail modal ── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: min(860px, 95vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+  .modal-title {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .modal-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: var(--radius);
+  }
+  .modal-close:hover { color: var(--text); background: var(--border); }
+  .modal-body { overflow-y: auto; padding: 0; }
+  .modal-body table { width: 100%; }
+  .modal-body thead { position: sticky; top: 0; background: var(--surface); }
 </style>
 </head>
 <body>
@@ -301,7 +357,7 @@
     <div>
       <div class="panel-title">Target ID</div>
       <div class="search-wrap">
-        <input id="q-input" type="text" placeholder="TIC_12345  /  KIC_9876  /  12345">
+        <input id="q-input" type="text" placeholder="TIC1234  /  KIC5678  /  EPIC9876">
       </div>
     </div>
 
@@ -453,6 +509,55 @@ function updateSortHeaders() {
   });
 }
 
+// ── ACAT detail modal ────────────────────────────────────────────────────────
+async function openModal(evt, el) {
+  if (evt) evt.preventDefault();
+  const acatId = el.dataset.id;
+  if (!acatId || acatId === '—') return;
+
+  $('modal-title').textContent = acatId;
+  $('modal-sub').textContent   = 'loading…';
+  $('modal-body').innerHTML    = '<tr><td colspan="7" class="state-msg">Loading…</td></tr>';
+  $('acat-modal').classList.add('open');
+  document.addEventListener('keydown', onModalKey);
+
+  const res  = await fetch(`/api/acat/${encodeURIComponent(acatId)}`);
+  const rows = await res.json();
+
+  $('modal-sub').textContent = `${rows.length} publication${rows.length === 1 ? '' : 's'}`;
+
+  if (!rows.length) {
+    $('modal-body').innerHTML = '<tr><td colspan="7" class="state-msg">No data.</td></tr>';
+    return;
+  }
+
+  $('modal-body').innerHTML = rows.map(r => {
+    const color = sourceColorMap[r.source] || '#888';
+    return `<tr>
+      <td class="id-cell">${(r.catalog_id ?? '').replace('_', '')}</td>
+      <td class="source-cell">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+              background:${color};margin-right:6px"></span>${r.source}
+      </td>
+      <td>${r.instrument || r.mission}</td>
+      ${fmtCell(r.numax, 2)}
+      ${fmtCell(r.e_numax, 3)}
+      ${fmtCell(r.teff, 1)}
+      ${fmtCell(r.e_teff, 1)}
+    </tr>`;
+  }).join('');
+}
+
+function closeModal(evt) {
+  if (evt && evt.target !== $('acat-modal')) return;
+  $('acat-modal').classList.remove('open');
+  document.removeEventListener('keydown', onModalKey);
+}
+
+function onModalKey(e) {
+  if (e.key === 'Escape') closeModal();
+}
+
 // ── load sources on startup ──────────────────────────────────────────────────
 async function loadSources() {
   const res  = await fetch('/api/sources');
@@ -557,7 +662,7 @@ function renderResults(data) {
   body.innerHTML = data.results.map(r => {
     const color = sourceColorMap[r.source] || '#888';
     return `<tr>
-      <td class="id-cell">${r.acat_id ?? '—'}</td>
+      <td class="id-cell"><a href="#" class="acat-link" data-id="${r.acat_id}" onclick="openModal(event,this)">${r.acat_id ?? '—'}</a></td>
       <td class="id-cell">${r.catalog_id.replace('_', '')}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
@@ -689,5 +794,34 @@ document.querySelectorAll('thead th[data-col]').forEach(th => {
 // ── init ─────────────────────────────────────────────────────────────────────
 loadSources();
 </script>
+
+<!-- ACAT detail modal -->
+<div class="modal-backdrop" id="acat-modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-title">—</div>
+        <div class="modal-sub" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Catalog ID</th>
+            <th>Source</th>
+            <th>Instrument</th>
+            <th style="text-align:right">numax (muHz)</th>
+            <th style="text-align:right">e_numax (muHz)</th>
+            <th style="text-align:right">Teff (K)</th>
+            <th style="text-align:right">e_Teff (K)</th>
+          </tr>
+        </thead>
+        <tbody id="modal-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 </body>
 </html>

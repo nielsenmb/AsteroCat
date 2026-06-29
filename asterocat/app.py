@@ -18,6 +18,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
+import re
 from flask import Flask, g, jsonify, request, send_from_directory
 
 # Static files live next to this module inside the installed package.
@@ -69,7 +70,7 @@ def api_sources():
 def api_search():
     """
     Query parameters (all optional):
-        q          -- substring match on catalog_id or mission_id
+        q          -- match on catalog_id; must include mission prefix (e.g. TIC1234, KIC5678)
         source     -- comma-separated source names to include
         numax_min  -- float
         numax_max  -- float
@@ -105,8 +106,12 @@ def api_search():
     clauses, params = [], []
 
     if q:
-        clauses.append("(catalog_id LIKE ? OR CAST(mission_id AS TEXT) LIKE ?)")
-        params += [f"%{q}%", f"%{q}%"]
+        # Normalise input: insert _ after mission prefix if absent
+        # e.g. "TIC1234" → "TIC_1234", "TIC_1234" → "TIC_1234", "1234" → reject
+        q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
+        if re.match(r'^[A-Za-z]+_\d+', q_norm):
+            clauses.append("catalog_id LIKE ?")
+            params.append(f"%{q_norm}%")
     if sources:
         placeholders = ",".join("?" * len(sources))
         clauses.append(f"source IN ({placeholders})")
@@ -141,6 +146,20 @@ def api_search():
 
     return jsonify({"total": total, "limit": limit, "offset": offset,
                     "results": [dict(r) for r in rows]})
+
+
+
+@app.get("/api/acat/<acat_id>")
+def api_acat(acat_id):
+    db = get_db()
+    rows = db.execute(
+        "SELECT acat_id, catalog_id, mission, instrument, mission_id, source, "
+        "       numax, e_numax, teff, e_teff "
+        "FROM targets WHERE acat_id = ? "
+        "ORDER BY source",
+        (acat_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 # ---------------------------------------------------------------------------
