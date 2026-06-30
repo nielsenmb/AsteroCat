@@ -16,6 +16,7 @@ Outputs:
 import json
 import numpy as np
 from pathlib import Path
+from asterocat import utils
 
 INPUT  = Path("sources/karim2025/karim2025.txt")
 OUTPUT = Path("sources/karim2025.json")
@@ -32,16 +33,16 @@ def main():
     numax = data["numax"].astype(float)
     teff  = data["Teff"].astype(float)
 
-    valid = np.isfinite(numax) & np.isfinite(teff)
-    print(f"  {valid.sum()} / {len(data)} rows with finite numax and Teff")
+    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
+    print(f"  {valid.sum()} / {len(data)} rows with finite non-zero numax")
 
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
             "mission_id": int(tic[i]),
-            "numax":      float(numax[i]),
+            "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    None,
-            "teff":       float(teff[i]),
+            "teff":       utils.float_for_json(teff[i]), 
             "e_teff":     None,
         })
 

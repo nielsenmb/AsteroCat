@@ -17,10 +17,13 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from asterocat import utils
 
 INPUT  = Path("sources/lund2025/lund_luminaries.csv")
 OUTPUT = Path("sources/lund2025.json")
 
+def float_for_json(val):
+    return float(val) if np.isfinite(val) else None
 
 def main():
     print("Loading Lund+2025 (luminaries)...")
@@ -30,20 +33,20 @@ def main():
     teff  = df["Teff"].values.astype(float)
     tic   = df["ID"].str.replace(r"[A-Za-z]", "", regex=True).values.astype(int)
 
-    e_numax = df["e_Numax"].values.astype(float) if "e_Numax" in df.columns else np.full(len(df), np.nan)
-    e_teff  = df["e_Teff"].values.astype(float)  if "e_Teff"  in df.columns else np.full(len(df), np.nan)
+    e_numax = df["Numax_err"].values.astype(float) if "Numax_err" in df.columns else np.full(len(df), np.nan)
+    e_teff  = df["Teff_err"].values.astype(float)  if "Teff_err"  in df.columns else np.full(len(df), np.nan)
 
-    valid = np.isfinite(numax) & np.isfinite(teff)
-    print(f"  {valid.sum()} / {len(df)} rows with finite numax and Teff")
+    valid = np.isfinite(numax) & (numax > 0)# & (teff > 0)
+    print(f"  {valid.sum()} / {len(df)} rows with finite non-zero numax")
 
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
             "mission_id": int(tic[i]),
-            "numax":      float(numax[i]),
-            "e_numax":    float(e_numax[i]) if np.isfinite(e_numax[i]) else None,
-            "teff":       float(teff[i]),
-            "e_teff":     float(e_teff[i])  if np.isfinite(e_teff[i])  else None,
+            "numax":      utils.float_for_json(numax[i]), 
+            "e_numax":    utils.float_for_json(e_numax[i]),  
+            "teff":       utils.float_for_json(teff[i]),  
+            "e_teff":     utils.float_for_json(e_teff[i]),  
         })
 
     OUTPUT.parent.mkdir(exist_ok=True)

@@ -1,4 +1,4 @@
-# Table 5 from Mathur et al. 2025 (arXiv:2605.24269)
+# Table 5 from Karim et al. 2025 (arXiv:2605.24269)
 # Asteroseismic and stellar parameters of candidate stars exhibiting periodic
 # auto-correlation functions and dark vertical ridges in their echelle diagrams.
 #

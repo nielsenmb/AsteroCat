@@ -25,6 +25,7 @@ import numpy as np
 from pathlib import Path
 from astropy.io import ascii
 from astropy.table import join
+from asterocat import utils
 
 DATA_DIR   = Path("sources/hon2022")
 TABLE1     = DATA_DIR / "table1.dat"
@@ -54,18 +55,19 @@ def main():
     e_numax = np.ma.filled(merged["e_numax"].data, np.nan).astype(float)
     teff    = np.where(merged["Teff"].mask,   np.nan, merged["Teff"].data.astype(float))
     e_teff  = np.where(merged["e_Teff"].mask, np.nan, merged["e_Teff"].data.astype(float))
+    
 
-    valid = np.isfinite(numax) & np.isfinite(teff)
-    print(f"  {valid.sum()} / {len(merged)} rows with finite numax and Teff")
+    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
+    print(f"  {valid.sum()} / {len(merged)} rows with finite non-zero numax")
 
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
             "mission_id": int(tic[i]),
-            "numax":      float(numax[i]),
-            "e_numax":    float(e_numax[i]) if np.isfinite(e_numax[i]) else None,
-            "teff":       float(teff[i]),
-            "e_teff":     float(e_teff[i])  if np.isfinite(e_teff[i])  else None,
+            "numax":      utils.float_for_json(numax[i]), 
+            "e_numax":    utils.float_for_json(e_numax[i]),  
+            "teff":       utils.float_for_json(teff[i]),  
+            "e_teff":     utils.float_for_json(e_teff[i]),
         })
 
     OUTPUT.parent.mkdir(exist_ok=True)
