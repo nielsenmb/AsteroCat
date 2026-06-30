@@ -341,7 +341,77 @@
   .modal-body { overflow-y: auto; padding: 0; }
   .modal-body table { width: 100%; }
   .modal-body thead { position: sticky; top: 0; background: var(--surface); }
+
+  /* ── row selection ── */
+  thead th.cb-col,
+  td.cb-col { width: 36px; padding: 8px 6px 8px 14px; }
+  input[type=checkbox].row-cb { accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; }
+  tbody tr.selected { background: #1a2340; }
+  tbody tr.selected:hover { background: #1e2a4a; }
+  .export-row { display: flex; align-items: center; gap: 8px; }
+  .selected-count { font-size: 12px; font-family: var(--font-mono); color: var(--accent2); }
+  .btn-primary-outline {
+    padding: 8px 14px; border-radius: var(--radius); font-size: 13px;
+    font-family: var(--font-ui); cursor: pointer; transition: opacity .15s;
+    background: transparent; border: 1px solid var(--accent); color: var(--accent); font-weight: 600;
+  }
+  .btn-primary-outline:hover { opacity: .8; }
+  .btn-primary-outline:disabled { opacity: .3; cursor: default; }
+
+  /* ── content column ── */
+  .content-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .content-col .tab-bar { border-bottom: 1px solid var(--border); padding: 10px 24px; flex-shrink: 0; display: flex; gap: 8px; }
+  .tab-btn {
+    padding: 8px 20px; border-radius: var(--radius); font-size: 13px;
+    font-family: var(--font-ui); cursor: pointer;
+    background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 600;
+    transition: border-color .15s, color .15s;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+  .tab-btn.active { border-color: var(--accent); color: var(--accent); }
+  #table-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 20px 24px; gap: 12px; }
+  #table-panel.hidden { display: none !important; }
+  #plot-panel { display: none; flex: 1; flex-direction: column; padding: 16px 24px; gap: 12px; min-width: 0; min-height: 0; }
+  #plot-panel.visible { display: flex; }
+
+  /* ── plot panel ── */
+  .plot-controls {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    font-size: 12px; font-family: var(--font-mono); flex-shrink: 0;
+  }
+  .plot-ctrl-group { display: flex; align-items: center; gap: 8px; }
+  .ctrl-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; }
+  .plot-select {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px;
+    padding: 7px 10px; outline: none; cursor: pointer; transition: border-color .15s;
+  }
+  .plot-select:hover, .plot-select:focus { border-color: var(--accent); }
+  .axis-opts { display: flex; gap: 8px; }
+  .axis-opts label {
+    display: flex; align-items: center; gap: 5px; color: var(--muted); cursor: pointer;
+    font-size: 12px; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: var(--radius); transition: border-color .15s, color .15s;
+  }
+  .axis-opts label:hover { border-color: var(--accent); color: var(--text); }
+  .axis-opts input { accent-color: var(--accent); }
+  #plot-wrap {
+    flex: 1; position: relative; min-height: 300px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; background: var(--bg); cursor: crosshair;
+  }
+  #plot-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .brush-rect {
+    fill: rgba(91,141,238,.15); stroke: var(--accent);
+    stroke-width: 1px; stroke-dasharray: 4 2; pointer-events: none;
+  }
+  .plot-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; font-family: var(--font-mono); flex-shrink: 0; }
+  .legend-item { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .modal-export-row { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
 <body>
 
@@ -426,18 +496,28 @@
 
   </aside>
 
-  <main>
+  <div class="content-col">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-table" onclick="switchTab('table')">Table</button>
+      <button class="tab-btn"        id="tab-plot"  onclick="switchTab('plot')">Plot</button>
+    </div>
+  <main id="table-panel">
     <div class="results-meta">
       <span id="result-count" class="count">—</span>
       <span id="result-label">results</span>
       <span id="active-filters" class="filter-tags"></span>
-      <button class="btn btn-ghost" id="export-btn" style="margin-left:auto" disabled>Export CSV</button>
+      <div class="export-row" style="margin-left:auto">
+        <span class="selected-count" id="selected-count"></span>
+        <button class="btn-primary-outline" id="export-selected-btn" disabled>Export selected</button>
+        <button class="btn btn-ghost" id="export-btn" disabled>Export all</button>
+      </div>
     </div>
 
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th class="cb-col"><input type="checkbox" class="row-cb" id="select-all-cb" title="Select/deselect all on this page"></th>
             <th data-col="acat_id">ACAT ID<i class="sort-icon">⬍</i></th>
             <th data-col="catalog_id">Catalog ID<i class="sort-icon">⬍</i></th>
             <th data-col="source">Source<i class="sort-icon">⬍</i></th>
@@ -461,6 +541,46 @@
       <span id="page-total"></span>
     </div>
   </main>
+
+  <!-- Plot panel -->
+  <div id="plot-panel">
+    <div class="plot-controls">
+      <div class="plot-ctrl-group">
+        <span class="ctrl-label">X</span>
+        <select class="plot-select" id="x-col">
+          <option value="teff">Teff</option>
+          <option value="numax">numax</option>
+        </select>
+        <div class="axis-opts">
+          <label><input type="checkbox" id="x-log"> log</label>
+          <label><input type="checkbox" id="x-inv" checked> invert</label>
+        </div>
+      </div>
+      <div class="plot-ctrl-group">
+        <span class="ctrl-label">Y</span>
+        <select class="plot-select" id="y-col">
+          <option value="numax">numax</option>
+          <option value="teff">Teff</option>
+        </select>
+        <div class="axis-opts">
+          <label><input type="checkbox" id="y-log" checked> log</label>
+          <label><input type="checkbox" id="y-inv" checked> invert</label>
+        </div>
+      </div>
+      <div class="plot-ctrl-group">
+        <span class="ctrl-label">Color by</span>
+        <select class="plot-select" id="color-col">
+          <option value="instrument">Instrument</option>
+          <option value="source">Source</option>
+        </select>
+      </div>
+      <button class="btn-primary-outline" id="plot-btn" style="margin-left:auto">Plot</button>
+    </div>
+    <div id="plot-wrap"><svg id="plot-svg"></svg></div>
+    <div class="plot-legend" id="plot-legend"></div>
+  </div>
+  </div><!-- /content-col -->
+
 </div>
 
 <script>
@@ -517,7 +637,7 @@ async function openModal(evt, el) {
 
   $('modal-title').textContent = acatId;
   $('modal-sub').textContent   = 'loading…';
-  $('modal-body').innerHTML    = '<tr><td colspan="7" class="state-msg">Loading…</td></tr>';
+  $('modal-body').innerHTML    = '<tr><td colspan="8" class="state-msg">Loading…</td></tr>';
   $('acat-modal').classList.add('open');
   document.addEventListener('keydown', onModalKey);
 
@@ -527,7 +647,7 @@ async function openModal(evt, el) {
   $('modal-sub').textContent = `${rows.length} publication${rows.length === 1 ? '' : 's'}`;
 
   if (!rows.length) {
-    $('modal-body').innerHTML = '<tr><td colspan="7" class="state-msg">No data.</td></tr>';
+    $('modal-body').innerHTML = '<tr><td colspan="8" class="state-msg">No data.</td></tr>';
     return;
   }
 
@@ -556,6 +676,65 @@ function closeModal(evt) {
 
 function onModalKey(e) {
   if (e.key === 'Escape') closeModal();
+}
+
+// ── row selection ────────────────────────────────────────────────────────────
+// Key: acat_id + '|' + source — persists across pages
+const selectedRows = new Set();
+// Store full row data for selected rows so we can export without re-fetching
+const selectedData = new Map();
+
+function updateSelectionUI() {
+  const n = selectedRows.size;
+  $('selected-count').textContent  = n > 0 ? `${n} selected` : '';
+  $('export-selected-btn').disabled = n === 0;
+  // Update select-all checkbox state
+  const cbs = document.querySelectorAll('tbody .row-cb');
+  const allChecked = cbs.length > 0 && [...cbs].every(cb => cb.checked);
+  const selectAllCb = $('select-all-cb');
+  if (selectAllCb) {
+    selectAllCb.checked       = allChecked;
+    selectAllCb.indeterminate = !allChecked && [...cbs].some(cb => cb.checked);
+  }
+}
+
+function toggleRow(evt, cb) {
+  evt.stopPropagation();
+  const tr  = cb.closest('tr');
+  const key = tr.dataset.key;
+  const r   = tr._rowData;
+  if (cb.checked) {
+    selectedRows.add(key);
+    if (r) selectedData.set(key, r);
+    tr.classList.add('selected');
+  } else {
+    selectedRows.delete(key);
+    selectedData.delete(key);
+    tr.classList.remove('selected');
+  }
+  updateSelectionUI();
+}
+
+function toggleRowFromClick(evt, tr) {
+  // Don't toggle if clicking a link or checkbox directly
+  if (evt.target.tagName === 'A' || evt.target.tagName === 'INPUT') return;
+  const cb = tr.querySelector('.row-cb');
+  if (cb) { cb.checked = !cb.checked; toggleRow(evt, cb); }
+}
+
+function exportSelectedCSV() {
+  const cols = ['acat_id','catalog_id','instrument','source','numax','e_numax','teff','e_teff'];
+  const rows = [...selectedData.values()].map(r => cols.map(c => {
+    if (c === 'catalog_id') return (r[c] ?? '').replace('_', '');
+    if (c === 'instrument') return instrument(r);
+    return r[c] ?? '';
+  }).join(','));
+  const csv  = [cols.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'asterocat_selected.csv'; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── load sources on startup ──────────────────────────────────────────────────
@@ -653,6 +832,35 @@ function renderResults(data) {
   $('next-btn').disabled        = data.offset + state.limit >= data.total;
   $('export-btn').disabled      = data.total === 0;
 
+  // Attach row data to each tr for export-selected
+  document.querySelectorAll('tbody tr.result-row').forEach((tr, i) => {
+    tr._rowData = data.results[i];
+  });
+
+  // Wire select-all checkbox
+  const selectAllCb = $('select-all-cb');
+  if (selectAllCb) {
+    selectAllCb.onchange = () => {
+      document.querySelectorAll('tbody .row-cb').forEach(cb => {
+        const tr  = cb.closest('tr');
+        const key = tr.dataset.key;
+        if (selectAllCb.checked) {
+          cb.checked = true;
+          tr.classList.add('selected');
+          selectedRows.add(key);
+          if (tr._rowData) selectedData.set(key, tr._rowData);
+        } else {
+          cb.checked = false;
+          tr.classList.remove('selected');
+          selectedRows.delete(key);
+          selectedData.delete(key);
+        }
+      });
+      updateSelectionUI();
+    };
+  }
+  updateSelectionUI();
+
   const body = $('results-body');
   if (!data.results.length) {
     body.innerHTML = `<tr><td colspan="8" class="state-msg">No results.</td></tr>`;
@@ -661,7 +869,11 @@ function renderResults(data) {
 
   body.innerHTML = data.results.map(r => {
     const color = sourceColorMap[r.source] || '#888';
-    return `<tr>
+    const rowKey = (r.acat_id || '') + '|' + r.source;
+    const checked = selectedRows.has(rowKey) ? 'checked' : '';
+    const selClass = selectedRows.has(rowKey) ? ' selected' : '';
+    return `<tr class="result-row${selClass}" data-key="${rowKey}" onclick="toggleRowFromClick(event, this)">
+      <td class="cb-col"><input type="checkbox" class="row-cb" ${checked} onclick="toggleRow(event, this)"></td>
       <td class="id-cell"><a href="#" class="acat-link" data-id="${r.acat_id}" onclick="openModal(event,this)">${r.acat_id ?? '—'}</a></td>
       <td class="id-cell">${r.catalog_id.replace('_', '')}</td>
       <td class="source-cell">
@@ -721,6 +933,7 @@ $('reset-btn').addEventListener('click', () => {
   $('active-filters').innerHTML = '';
   $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>`;
   $('result-count').textContent = '—';
+  selectedRows.clear(); selectedData.clear(); updateSelectionUI();
 });
 
 $('prev-btn').addEventListener('click', () => doSearch(state.offset - state.limit));
@@ -775,6 +988,7 @@ async function exportCSV() {
 }
 
 $('export-btn').addEventListener('click', exportCSV);
+$('export-selected-btn').addEventListener('click', exportSelectedCSV);
 
 
 // ── sort header click ─────────────────────────────────────────────────────────
@@ -793,6 +1007,285 @@ document.querySelectorAll('thead th[data-col]').forEach(th => {
 });
 // ── init ─────────────────────────────────────────────────────────────────────
 loadSources();
+// ── instrument colour palette ─────────────────────────────────────────────────
+const INSTRUMENT_COLORS = {
+  'Kepler':     '#fbbf24',
+  'K2':         '#34d399',
+  'TESS':       '#a78bfa',
+  'PLATO':      '#38bdf8',
+  'CoRoT':      '#fb923c',
+  'Roman':      '#f472b6',
+  '_ground':    '#6b9e6b',   // catch-all for anything containing '@'
+  '_unknown':   '#6b7499',
+};
+
+function instrColor(instr) {
+  if (!instr) return INSTRUMENT_COLORS['_unknown'];
+  if (instr.includes('@')) return INSTRUMENT_COLORS['_ground'];
+  return INSTRUMENT_COLORS[instr] || INSTRUMENT_COLORS['_unknown'];
+}
+
+// ── tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const isPlot = tab === 'plot';
+  document.getElementById('table-panel').classList.toggle('hidden', isPlot);
+  document.getElementById('plot-panel').classList.toggle('visible', isPlot);
+  document.getElementById('tab-table').classList.toggle('active', !isPlot);
+  document.getElementById('tab-plot').classList.toggle('active',  isPlot);
+  if (isPlot && !window._plotDrawn) drawPlot();
+}
+
+// ── plot state ────────────────────────────────────────────────────────────────
+let bgData = null;   // background (all DB sample)
+let fgData = null;   // foreground (search results)
+window._plotDrawn = false;
+
+// ── column accessors & labels ─────────────────────────────────────────────────
+const COL_LABEL = { numax: 'numax (muHz)', teff: 'Teff (K)' };
+
+function getVal(d, col) { return +d[col]; }
+
+// ── main draw function ────────────────────────────────────────────────────────
+async function drawPlot() {
+  const wrap = document.getElementById('plot-wrap');
+  const svg  = document.getElementById('plot-svg');
+  svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#6b7499" font-size="13" font-family="monospace">Loading…</text>';
+
+  const xCol   = document.getElementById('x-col').value;
+  const yCol   = document.getElementById('y-col').value;
+  const colorBy = document.getElementById('color-col').value;
+  const xLog   = document.getElementById('x-log').checked;
+  const yLog   = document.getElementById('y-log').checked;
+  const xInv   = document.getElementById('x-inv').checked;
+  const yInv   = document.getElementById('y-inv').checked;
+
+  // Fetch background if not cached
+  if (!bgData) {
+    const r = await fetch('/api/plot/background');
+    bgData  = await r.json();
+  }
+
+  // Fetch foreground using current search filters
+  const params = buildParams(0);
+  const r2 = await fetch(`/api/plot/foreground?${params}`);
+  fgData   = await r2.json();
+
+  // Filter to valid points
+  const bgValid = bgData.filter(d => isFinite(getVal(d, xCol)) && isFinite(getVal(d, yCol)));
+  const fgValid = fgData.filter(d => isFinite(getVal(d, xCol)) && isFinite(getVal(d, yCol)));
+
+  // Dimensions
+  const rect = wrap.getBoundingClientRect();
+  const W = rect.width, H = Math.max(rect.height, 300);
+  const M = { top: 20, right: 20, bottom: 50, left: 60 };
+  const iW = W - M.left - M.right;
+  const iH = H - M.top  - M.bottom;
+
+  // Scales — domain from full bgData so foreground stays in context
+  const allX = bgValid.map(d => getVal(d, xCol));
+  const allY = bgValid.map(d => getVal(d, yCol));
+  const xExt = d3.extent(allX);
+  const yExt = d3.extent(allY);
+
+  let xScale = (xLog ? d3.scaleLog() : d3.scaleLinear())
+    .domain(xInv ? [xExt[1], xExt[0]] : xExt)
+    .range([0, iW]).nice();
+  let yScale = (yLog ? d3.scaleLog() : d3.scaleLinear())
+    .domain(yInv ? [yExt[1], yExt[0]] : yExt)
+    .range([0, iH]).nice();
+
+  // Build SVG
+  const svgEl = d3.select('#plot-svg')
+    .attr('width', W).attr('height', H);
+  svgEl.selectAll('*').remove();
+
+  const g = svgEl.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+  // Clip path
+  g.append('clipPath').attr('id', 'plot-clip')
+    .append('rect').attr('width', iW).attr('height', iH);
+
+  // Axes
+  const xAxis = d3.axisBottom(xScale).ticks(6).tickSize(-iH);
+  const yAxis = d3.axisLeft(yScale).ticks(6).tickSize(-iW);
+
+  g.append('g').attr('class', 'x-axis').attr('transform', `translate(0,${iH})`)
+    .call(xAxis)
+    .call(a => a.selectAll('line').attr('stroke', '#262c3e'))
+    .call(a => a.selectAll('text').attr('fill', '#6b7499').attr('font-family', 'monospace').attr('font-size', 11))
+    .call(a => a.select('.domain').remove());
+
+  g.append('g').attr('class', 'y-axis')
+    .call(yAxis)
+    .call(a => a.selectAll('line').attr('stroke', '#262c3e'))
+    .call(a => a.selectAll('text').attr('fill', '#6b7499').attr('font-family', 'monospace').attr('font-size', 11))
+    .call(a => a.select('.domain').remove());
+
+  // Axis labels
+  g.append('text').attr('x', iW/2).attr('y', iH + 40)
+    .attr('text-anchor', 'middle').attr('fill', '#6b7499')
+    .attr('font-family', 'monospace').attr('font-size', 12)
+    .text(COL_LABEL[xCol] || xCol);
+
+  g.append('text').attr('transform', 'rotate(-90)')
+    .attr('x', -iH/2).attr('y', -46)
+    .attr('text-anchor', 'middle').attr('fill', '#6b7499')
+    .attr('font-family', 'monospace').attr('font-size', 12)
+    .text(COL_LABEL[yCol] || yCol);
+
+  // Points group (clipped)
+  const pts = g.append('g').attr('clip-path', 'url(#plot-clip)');
+
+  // Background points
+  pts.selectAll('.bg-pt').data(bgValid).enter().append('circle')
+    .attr('class', 'bg-pt')
+    .attr('cx', d => xScale(getVal(d, xCol)))
+    .attr('cy', d => yScale(getVal(d, yCol)))
+    .attr('r', 1.8)
+    .attr('fill', '#4a5270')
+    .attr('fill-opacity', 0.35);
+
+  // Foreground points — colored
+  const colorFn = colorBy === 'instrument'
+    ? d => instrColor(d.instrument)
+    : d => sourceColorMap[d.source] || '#888';
+
+  const fgPts = pts.selectAll('.fg-pt').data(fgValid).enter().append('circle')
+    .attr('class', 'fg-pt')
+    .attr('cx', d => xScale(getVal(d, xCol)))
+    .attr('cy', d => yScale(getVal(d, yCol)))
+    .attr('r', 3)
+    .attr('fill', colorFn)
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', '#0f1117')
+    .attr('stroke-width', 0.5);
+
+  // Legend
+  const legendKeys = colorBy === 'instrument'
+    ? [...new Set(fgValid.map(d => d.instrument || '_unknown'))]
+    : [...new Set(fgValid.map(d => d.source))];
+
+  const legend = document.getElementById('plot-legend');
+  legend.innerHTML = legendKeys.sort().map(k => {
+    const col = colorBy === 'instrument' ? instrColor(k) : (sourceColorMap[k] || '#888');
+    return `<span class="legend-item"><span class="legend-dot" style="background:${col}"></span>${k}</span>`;
+  }).join('');
+
+  // ── Box selection brush ───────────────────────────────────────────────────
+  let brushStart = null, brushRect = null;
+  let selPoints  = [];
+
+  const overlay = g.append('rect')
+    .attr('width', iW).attr('height', iH)
+    .attr('fill', 'none').attr('pointer-events', 'all')
+    .style('cursor', 'crosshair');
+
+  overlay.on('mousedown', function(evt) {
+    const [mx, my] = d3.pointer(evt);
+    brushStart = [mx, my];
+    if (brushRect) brushRect.remove();
+    brushRect = g.append('rect').attr('class', 'brush-rect')
+      .attr('x', mx).attr('y', my).attr('width', 0).attr('height', 0);
+  });
+
+  d3.select(window).on('mousemove.brush', function(evt) {
+    if (!brushStart) return;
+    const [mx, my] = d3.pointer(evt, g.node());
+    const x0 = Math.min(brushStart[0], mx), y0 = Math.min(brushStart[1], my);
+    const x1 = Math.max(brushStart[0], mx), y1 = Math.max(brushStart[1], my);
+    if (brushRect) brushRect.attr('x', x0).attr('y', y0)
+      .attr('width', x1-x0).attr('height', y1-y0);
+  });
+
+  d3.select(window).on('mouseup.brush', function(evt) {
+    if (!brushStart) return;
+    const [mx, my] = d3.pointer(evt, g.node());
+    const x0 = Math.min(brushStart[0], mx), y0 = Math.min(brushStart[1], my);
+    const x1 = Math.max(brushStart[0], mx), y1 = Math.max(brushStart[1], my);
+    brushStart = null;
+    if (brushRect) { brushRect.remove(); brushRect = null; }
+
+    if (x1 - x0 < 4 && y1 - y0 < 4) return; // ignore tiny clicks
+
+    // Find foreground points within the brush box
+    const xMin = xScale.invert(x0), xMax = xScale.invert(x1);
+    const yMin = yScale.invert(y0), yMax = yScale.invert(y1);
+
+    selPoints = fgValid.filter(d => {
+      const vx = getVal(d, xCol), vy = getVal(d, yCol);
+      return vx >= Math.min(xMin,xMax) && vx <= Math.max(xMin,xMax) &&
+             vy >= Math.min(yMin,yMax) && vy <= Math.max(yMin,yMax);
+    });
+
+    if (selPoints.length) openSelModal(selPoints, xCol, yCol);
+  });
+
+  window._plotDrawn = true;
+}
+
+// ── selection summary modal ───────────────────────────────────────────────────
+function openSelModal(points, xCol, yCol) {
+  document.getElementById('sel-modal-title').textContent = `${points.length} selected`;
+  document.getElementById('sel-modal-sub').textContent   = `drag-selected points`;
+
+  document.getElementById('sel-modal-body').innerHTML = points.map(d => `
+    <tr>
+      <td class="id-cell"><a href="#" onclick="openAcatFromSel(event,'${d.acat_id}')">${d.acat_id ?? '—'}</a></td>
+      <td class="id-cell">${(d.catalog_id ?? '').replace('_','')}</td>
+      <td class="source-cell">${d.source}</td>
+      <td>${d.instrument || d.mission || '—'}</td>
+      ${fmtCell(d[xCol] === d.numax ? d.numax : d.teff, 2)}
+      ${fmtCell(d[yCol] === d.teff  ? d.teff  : d.numax, 1)}
+    </tr>`).join('');
+
+  document.getElementById('sel-export-btn').onclick = () => exportSelPoints(points);
+  document.getElementById('sel-modal').classList.add('open');
+  document.addEventListener('keydown', onSelModalKey);
+}
+
+function openAcatFromSel(evt, acatId) {
+  evt.preventDefault();
+  closeSelModal();
+  openModal(null, { dataset: { id: acatId } });
+}
+
+function closeSelModal(evt) {
+  if (evt && evt.target !== document.getElementById('sel-modal')) return;
+  document.getElementById('sel-modal').classList.remove('open');
+  document.removeEventListener('keydown', onSelModalKey);
+}
+
+function onSelModalKey(e) { if (e.key === 'Escape') closeSelModal(); }
+
+function exportSelPoints(points) {
+  const cols = ['acat_id','catalog_id','instrument','source','numax','teff'];
+  const rows = points.map(d => cols.map(c => {
+    if (c === 'catalog_id') return (d[c] ?? '').replace('_','');
+    return d[c] ?? '';
+  }).join(','));
+  const csv  = [cols.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'asterocat_plot_selection.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Re-draw when plot controls change (but only if plot tab is active)
+['x-col','y-col','color-col','x-log','x-inv','y-log','y-inv'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', () => {
+    window._plotDrawn = false;
+    if (document.getElementById('plot-panel').classList.contains('visible')) drawPlot();
+  });
+});
+
+document.getElementById('plot-btn').addEventListener('click', () => {
+  window._plotDrawn = false;
+  bgData = null; // force background refresh
+  drawPlot();
+});
+
+
 </script>
 
 <!-- ACAT detail modal -->
@@ -823,5 +1316,31 @@ loadSources();
     </div>
   </div>
 </div>
+
+<!-- Box selection summary modal -->
+<div class="modal-backdrop" id="sel-modal" onclick="closeSelModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="sel-modal-title">Selection</div>
+        <div class="modal-sub"   id="sel-modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeSelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table>
+        <thead><tr>
+          <th>ACAT ID</th><th>Catalog ID</th><th>Source</th><th>Instrument</th>
+          <th style="text-align:right">numax (muHz)</th><th style="text-align:right">Teff (K)</th>
+        </tr></thead>
+        <tbody id="sel-modal-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-export-row">
+      <button class="btn btn-primary" id="sel-export-btn">Export CSV</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

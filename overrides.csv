@@ -1,0 +1,9 @@
+# overrides.csv
+# Manual cross-match corrections for build_db.py.
+# Format: catalog_id, canonical_id
+# Lines starting with # are ignored.
+#
+# Examples:
+#   KIC_1234567, TIC_9876543
+#   EPIC_211700700, TIC_8888888
+#   HD_12345, HD_12345

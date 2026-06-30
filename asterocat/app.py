@@ -162,6 +162,69 @@ def api_acat(acat_id):
     return jsonify([dict(r) for r in rows])
 
 
+
+@app.get("/api/plot/background")
+def api_plot_background():
+    """Return up to 10k randomly sampled rows for the plot background."""
+    db   = get_db()
+    n    = request.args.get("n", default=10000, type=int)
+    rows = db.execute(
+        "SELECT acat_id, catalog_id, instrument, numax, teff "
+        "FROM targets "
+        "WHERE numax IS NOT NULL AND teff IS NOT NULL "
+        "ORDER BY RANDOM() LIMIT ?",
+        (n,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/plot/foreground")
+def api_plot_foreground():
+    """Return search-filtered rows for the plot foreground (same filters as /api/search)."""
+    db = get_db()
+
+    q           = request.args.get("q", "").strip()
+    sources     = [s.strip() for s in request.args.get("source",     "").split(",") if s.strip()]
+    instruments = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
+    numax_min   = request.args.get("numax_min", type=float)
+    numax_max   = request.args.get("numax_max", type=float)
+    teff_min    = request.args.get("teff_min",  type=float)
+    teff_max    = request.args.get("teff_max",  type=float)
+
+    clauses, params = [], []
+    clauses.append("numax IS NOT NULL AND teff IS NOT NULL")
+
+    if q:
+        q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
+        if re.match(r'^[A-Za-z]+_\d+', q_norm):
+            clauses.append("catalog_id LIKE ?")
+            params.append(f"%{q_norm}%")
+    if sources:
+        placeholders = ",".join("?" * len(sources))
+        clauses.append(f"source IN ({placeholders})")
+        params += sources
+    if instruments:
+        placeholders = ",".join("?" * len(instruments))
+        clauses.append(f"instrument IN ({placeholders})")
+        params += instruments
+    if numax_min is not None:
+        clauses.append("numax >= ?");  params.append(numax_min)
+    if numax_max is not None:
+        clauses.append("numax <= ?");  params.append(numax_max)
+    if teff_min is not None:
+        clauses.append("teff >= ?");   params.append(teff_min)
+    if teff_max is not None:
+        clauses.append("teff <= ?");   params.append(teff_max)
+
+    where = "WHERE " + " AND ".join(clauses)
+    rows  = db.execute(
+        f"SELECT acat_id, catalog_id, instrument, source, numax, teff "
+        f"FROM targets {where} ORDER BY acat_id",
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
