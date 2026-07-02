@@ -60,8 +60,8 @@ def api_sources():
     """Return list of loaded sources and their row counts."""
     db = get_db()
     rows = db.execute(
-        "SELECT source, mission, instrument, COUNT(*) as n "
-        "FROM targets GROUP BY source, mission, instrument ORDER BY source"
+        "SELECT source, catalog, instrument, COUNT(*) as n "
+        "FROM targets GROUP BY source, catalog, instrument ORDER BY source"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -96,7 +96,7 @@ def api_search():
     sort_dir  = request.args.get("sort_dir", "asc").lower()
 
     # Whitelist sortable columns to prevent SQL injection
-    SORTABLE = {"acat_id", "catalog_id", "mission", "instrument", "source",
+    SORTABLE = {"acat_id", "catalog_id", "catalog", "instrument", "source",
                 "numax", "e_numax", "teff", "e_teff"}
     if sort_col not in SORTABLE:
         sort_col = "acat_id"
@@ -136,8 +136,8 @@ def api_search():
     ).fetchone()[0]
 
     rows = db.execute(
-        f"SELECT acat_id, catalog_id, mission, instrument, mission_id, source,"
-        f"       numax, e_numax, teff, e_teff "
+        f"SELECT acat_id, catalog_id, catalog, instrument, source,"
+        f"       ads_url, teff_ads_url, numax, e_numax, teff, e_teff "
         f"FROM targets {where} "
         f"ORDER BY {sort_col} {sort_dir.upper()}, acat_id "
         f"LIMIT ? OFFSET ?",
@@ -153,8 +153,8 @@ def api_search():
 def api_acat(acat_id):
     db = get_db()
     rows = db.execute(
-        "SELECT acat_id, catalog_id, mission, instrument, mission_id, source, "
-        "       numax, e_numax, teff, e_teff "
+        "SELECT acat_id, catalog_id, catalog, instrument, source, "
+        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff "
         "FROM targets WHERE acat_id = ? "
         "ORDER BY source",
         (acat_id,),
@@ -169,7 +169,7 @@ def api_plot_background():
     db   = get_db()
     n    = request.args.get("n", default=10000, type=int)
     rows = db.execute(
-        "SELECT acat_id, catalog_id, instrument, numax, teff "
+        "SELECT acat_id, catalog_id, catalog, instrument, numax, teff "
         "FROM targets "
         "WHERE numax IS NOT NULL AND teff IS NOT NULL "
         "ORDER BY RANDOM() LIMIT ?",
@@ -218,9 +218,35 @@ def api_plot_foreground():
 
     where = "WHERE " + " AND ".join(clauses)
     rows  = db.execute(
-        f"SELECT acat_id, catalog_id, instrument, source, numax, teff "
+        f"SELECT acat_id, catalog_id, catalog, instrument, source, ads_url, teff_ads_url, numax, teff "
         f"FROM targets {where} ORDER BY acat_id",
         params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+
+@app.get("/api/search/alias")
+def api_search_alias():
+    """
+    Search the aliases table for a free-text identifier (e.g. "HD 12345",
+    "alf Cen A"). Returns matching acat_ids and their target rows.
+    """
+    db    = get_db()
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify([])
+
+    # Try exact match first, then prefix match
+    rows = db.execute(
+        "SELECT t.acat_id, t.catalog_id, t.catalog, t.instrument, t.source, "
+        "       t.ads_url, t.teff_ads_url, t.numax, t.e_numax, t.teff, t.e_teff, "
+        "       a.alias "
+        "FROM aliases a JOIN targets t ON a.acat_id = t.acat_id "
+        "WHERE a.alias LIKE ? "
+        "ORDER BY t.catalog_id, t.source "
+        "LIMIT 200",
+        (f"%{query}%",),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 

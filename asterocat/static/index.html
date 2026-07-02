@@ -410,6 +410,24 @@
   .legend-item { display: flex; align-items: center; gap: 5px; color: var(--muted); }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .modal-export-row { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+
+  /* ── ADS link ── */
+  .ads-link {
+    font-size: 10px; font-family: var(--font-mono);
+    color: var(--muted); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 1px 5px; margin-left: 6px;
+    transition: border-color .15s, color .15s;
+    vertical-align: middle;
+  }
+  .ads-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  .toggle-all-btn {
+    background: none; border: none; color: var(--muted); font-size: 11px;
+    font-family: var(--font-mono); cursor: pointer; padding: 0 0 6px 0;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .toggle-all-btn:hover { color: var(--accent); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
@@ -427,7 +445,7 @@
     <div>
       <div class="panel-title">Target ID</div>
       <div class="search-wrap">
-        <input id="q-input" type="text" placeholder="TIC1234  /  KIC5678  /  EPIC9876">
+        <input id="q-input" type="text" placeholder="TIC1234  /  KIC5678  /  HD1234  /  alf Cen A">
       </div>
     </div>
 
@@ -475,6 +493,7 @@
         <span>Instrument</span><span class="chevron">▾</span>
       </button>
       <div class="collapse-body">
+        <button class="toggle-all-btn" onclick="toggleAll('instrument')">select / deselect all</button>
         <div id="instrument-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
       </div>
     </div>
@@ -485,6 +504,7 @@
         <span>Sources</span><span class="chevron">▾</span>
       </button>
       <div class="collapse-body">
+        <button class="toggle-all-btn" onclick="toggleAll('source')">select / deselect all</button>
         <div id="source-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
       </div>
     </div>
@@ -526,10 +546,11 @@
             <th data-col="e_numax" style="text-align:right">e_numax (muHz)<i class="sort-icon">⬍</i></th>
             <th data-col="teff" style="text-align:right">Teff (K)<i class="sort-icon">⬍</i></th>
             <th data-col="e_teff" style="text-align:right">e_Teff (K)<i class="sort-icon">⬍</i></th>
+            <th data-col="teff_ads_url">Teff source<i class="sort-icon">⬍</i></th>
           </tr>
         </thead>
         <tbody id="results-body">
-          <tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>
+          <tr><td colspan="9" class="state-msg">Run a search to load results.</td></tr>
         </tbody>
       </table>
     </div>
@@ -593,7 +614,7 @@ let sourceColorMap = {};
 
 
 // ── instrument is now a DB column, passed directly from API ─────────────────
-function instrument(r) { return r.instrument || r.mission; }
+function instrument(r) { return r.instrument || r.catalog || '—'; }
 // ── state ────────────────────────────────────────────────────────────────────
 let state = { offset: 0, limit: 200, total: 0 };
 
@@ -637,7 +658,7 @@ async function openModal(evt, el) {
 
   $('modal-title').textContent = acatId;
   $('modal-sub').textContent   = 'loading…';
-  $('modal-body').innerHTML    = '<tr><td colspan="8" class="state-msg">Loading…</td></tr>';
+  $('modal-body').innerHTML    = '<tr><td colspan="9" class="state-msg">Loading…</td></tr>';
   $('acat-modal').classList.add('open');
   document.addEventListener('keydown', onModalKey);
 
@@ -647,7 +668,7 @@ async function openModal(evt, el) {
   $('modal-sub').textContent = `${rows.length} publication${rows.length === 1 ? '' : 's'}`;
 
   if (!rows.length) {
-    $('modal-body').innerHTML = '<tr><td colspan="8" class="state-msg">No data.</td></tr>';
+    $('modal-body').innerHTML = '<tr><td colspan="9" class="state-msg">No data.</td></tr>';
     return;
   }
 
@@ -664,6 +685,7 @@ async function openModal(evt, el) {
       ${fmtCell(r.e_numax, 3)}
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
+      <td>${adsLink(r.teff_ads_url)}</td>
     </tr>`;
   }).join('');
 }
@@ -737,6 +759,19 @@ function exportSelectedCSV() {
   URL.revokeObjectURL(url);
 }
 
+
+function adsLink(url) {
+  if (!url) return '';
+  return `<a href="${url}" target="_blank" class="ads-link" onclick="event.stopPropagation()" title="View on ADS">ADS</a>`;
+}
+
+
+function toggleAll(name) {
+  const boxes = [...document.querySelectorAll(`input[name=${name}]`)];
+  const allChecked = boxes.every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+}
+
 // ── load sources on startup ──────────────────────────────────────────────────
 async function loadSources() {
   const res  = await fetch('/api/sources');
@@ -776,6 +811,29 @@ async function loadSources() {
   `).join('');
 }
 
+
+// ── alias search (free-text: HD numbers, Bayer names, etc.) ──────────────────
+async function doAliasSearch(q) {
+  updateFilterTags();
+  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Searching aliases…</td></tr>`;
+  const res  = await fetch(`/api/search/alias?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+
+  $('result-count').textContent = data.length;
+  $('result-label').textContent = data.length === 1 ? 'result' : 'results';
+  $('prev-btn').disabled = true;
+  $('next-btn').disabled = true;
+  $('export-btn').disabled = data.length === 0;
+
+  if (!data.length) {
+    $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">No results for "${q}".</td></tr>`;
+    return;
+  }
+
+  // Reuse renderResults format by wrapping in expected shape
+  renderResults({ total: data.length, limit: data.length, offset: 0, results: data });
+}
+
 // ── build query params ───────────────────────────────────────────────────────
 function buildParams(offset=0) {
   const p = new URLSearchParams();
@@ -810,7 +868,7 @@ function buildParams(offset=0) {
   p.set('offset', offset);
   if (sortCol) {
     // instrument sorts by mission (1-to-1 mapping, same order)
-    p.set('sort_col', sortCol);
+    p.set('sort_col', sortCol === 'mission' ? 'catalog' : sortCol);
     p.set('sort_dir', sortDir === 1 ? 'asc' : 'desc');
   }
   return p;
@@ -863,7 +921,7 @@ function renderResults(data) {
 
   const body = $('results-body');
   if (!data.results.length) {
-    body.innerHTML = `<tr><td colspan="8" class="state-msg">No results.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="state-msg">No results.</td></tr>`;
     return;
   }
 
@@ -878,13 +936,14 @@ function renderResults(data) {
       <td class="id-cell">${r.catalog_id.replace('_', '')}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
-              width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}
+              width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}${adsLink(r.ads_url)}
       </td>
       <td>${instrument(r)}</td>
       ${fmtCell(r.numax, 2)}
       ${fmtCell(r.e_numax, 3)}
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
+      <td>${adsLink(r.teff_ads_url)}</td>
     </tr>`;
   }).join('');
 }
@@ -910,7 +969,13 @@ function updateFilterTags() {
 // ── search ───────────────────────────────────────────────────────────────────
 async function doSearch(offset=0) {
   updateFilterTags();
-  $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Searching…</td></tr>`;
+  // If query doesn't match catalog-id format, try alias search instead
+  const rawQ = $('q-input').value.trim();
+  if (rawQ && !/^[A-Za-z]+_?\d+/.test(rawQ)) {
+    doAliasSearch(rawQ);
+    return;
+  }
+  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Searching…</td></tr>`;
   const params = buildParams(offset);
   const res    = await fetch(`/api/search?${params}`);
   const data   = await res.json();
@@ -931,7 +996,7 @@ $('reset-btn').addEventListener('click', () => {
   document.querySelectorAll('input[name=source]').forEach(el => el.checked = true);
   document.querySelectorAll('input[name=instrument]').forEach(el => el.checked = true);
   $('active-filters').innerHTML = '';
-  $('results-body').innerHTML = `<tr><td colspan="8" class="state-msg">Run a search to load results.</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Run a search to load results.</td></tr>`;
   $('result-count').textContent = '—';
   selectedRows.clear(); selectedData.clear(); updateSelectionUI();
 });
@@ -1088,10 +1153,10 @@ async function drawPlot() {
   const yExt = d3.extent(allY);
 
   let xScale = (xLog ? d3.scaleLog() : d3.scaleLinear())
-    .domain(xInv ? [xExt[1], xExt[0]] : xExt)
+    .domain(xInv ? [xExt[1], xExt[0]] : [xExt[0], xExt[1]])
     .range([0, iW]).nice();
   let yScale = (yLog ? d3.scaleLog() : d3.scaleLinear())
-    .domain(yInv ? [yExt[1], yExt[0]] : yExt)
+    .domain(yInv ? [yExt[0], yExt[1]] : [yExt[1], yExt[0]])
     .range([0, iH]).nice();
 
   // Build SVG
@@ -1226,6 +1291,8 @@ async function drawPlot() {
 // ── selection summary modal ───────────────────────────────────────────────────
 function openSelModal(points, xCol, yCol) {
   document.getElementById('sel-modal-title').textContent = `${points.length} selected`;
+  document.getElementById('sel-x-header').textContent = COL_LABEL[xCol] || xCol;
+  document.getElementById('sel-y-header').textContent = COL_LABEL[yCol] || yCol;
   document.getElementById('sel-modal-sub').textContent   = `drag-selected points`;
 
   document.getElementById('sel-modal-body').innerHTML = points.map(d => `
@@ -1234,8 +1301,8 @@ function openSelModal(points, xCol, yCol) {
       <td class="id-cell">${(d.catalog_id ?? '').replace('_','')}</td>
       <td class="source-cell">${d.source}</td>
       <td>${d.instrument || d.mission || '—'}</td>
-      ${fmtCell(d[xCol] === d.numax ? d.numax : d.teff, 2)}
-      ${fmtCell(d[yCol] === d.teff  ? d.teff  : d.numax, 1)}
+      ${fmtCell(d[xCol], xCol === "numax" ? 2 : 1)}
+      ${fmtCell(d[yCol], yCol === "numax" ? 2 : 1)}
     </tr>`).join('');
 
   document.getElementById('sel-export-btn').onclick = () => exportSelPoints(points);
@@ -1331,7 +1398,7 @@ document.getElementById('plot-btn').addEventListener('click', () => {
       <table>
         <thead><tr>
           <th>ACAT ID</th><th>Catalog ID</th><th>Source</th><th>Instrument</th>
-          <th style="text-align:right">numax (muHz)</th><th style="text-align:right">Teff (K)</th>
+          <th style="text-align:right" id="sel-x-header"></th><th style="text-align:right" id="sel-y-header"></th>
         </tr></thead>
         <tbody id="sel-modal-body"></tbody>
       </table>
