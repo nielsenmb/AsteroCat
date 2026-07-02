@@ -21,6 +21,8 @@ from asterocat import utils
 
 INPUT  = Path("sources/lund2025/lund_luminaries.csv")
 OUTPUT = Path("sources/lund2025.json")
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025A%26A...701A.285L"
+TEFF_ADS_URL = None
 
 def float_for_json(val):
     return float(val) if np.isfinite(val) else None
@@ -42,7 +44,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(tic[i]),
+            "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -51,7 +53,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Lund+2025", "mission": "TIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Lund+2025", 
+                   "catalog": "TIC",
+                   "instrument": "TESS",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

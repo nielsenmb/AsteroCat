@@ -19,8 +19,9 @@ import warnings
 import numpy as np
 from pathlib import Path
 from astropy.io import ascii
-from astropy.table import Table, vstack, join
+from astropy.table import vstack, join
 from astroquery.mast import Catalogs
+from asterocat import utils
 
 warnings.filterwarnings("ignore")
 
@@ -28,7 +29,8 @@ CATALOG_DAT = Path("sources/hatt2023/catalog.dat")
 README      = Path("sources/hatt2023/ReadMe.txt")
 OUTPUT      = Path("sources/hatt2023.json")
 BATCH       = 1000
-
+ADS_URL     = 'https://ui.adsabs.harvard.edu/abs/2023A%26A...669A..67H'
+TEFF_ADS_URL = None
 
 def chunks(lst, n):
     for i in range(0, len(lst), n):
@@ -47,9 +49,7 @@ def main():
     rows = []
     n_batches = -(-len(tic_ids) // BATCH)
     for i, chunk in enumerate(chunks(tic_ids, BATCH)):
-        t = Catalogs.query_criteria(catalog="Tic", ID=chunk)[
-            "ID", "Teff", "e_Teff"
-        ]
+        t = Catalogs.query_criteria(catalog="Tic", ID=chunk)["ID", "Teff", "e_Teff"]
         rows.append(t)
         print(f"  Batch {i+1}/{n_batches}: {len(t)} rows")
 
@@ -61,18 +61,24 @@ def main():
     merged = merged[np.isfinite(merged["Teff"])]
     print(f"  {len(merged)} stars with both numax and Teff")
 
+
     targets = []
     for row in merged:
         targets.append({
-            "mission_id": int(row["TIC"]),
-            "numax":      float(row["numax"])       if np.isfinite(row["numax"])  else None,
+            "catalog_id": int(row["TIC"]),
+            "numax":      utils.float_for_json(row['numax']), #float(row["numax"])       if np.isfinite(row["numax"])  else None,
             "e_numax":    float(row["e_numax"])     if "e_numax" in merged.colnames and np.isfinite(row["e_numax"]) else None,
-            "teff":       float(row["Teff"])        if np.isfinite(row["Teff"])   else None,
-            "e_teff":     float(row["e_Teff"])      if np.isfinite(row["e_Teff"]) else None,
+            "teff":       utils.float_for_json(row["Teff"]),
+            "e_teff":     utils.float_for_json(row["e_Teff"])
         })
 
     OUTPUT.parent.mkdir(exist_ok=True)
-    payload = {"source": "Hatt+2023", "mission": "TIC", "targets": targets}
+    payload = {"source": "Hatt+2023", 
+               "catalog":    "TIC",
+               "instrument": "TESS",
+               "ads_url": ADS_URL, 
+               "teff_ads_url": TEFF_ADS_URL,
+               "targets": targets}
     with open(OUTPUT, "w") as f:
         json.dump(payload, f, indent=2)
 

@@ -21,7 +21,8 @@ from asterocat import utils
 
 INPUT  = Path("sources/lund2024/lund_keystone.csv")
 OUTPUT = Path("sources/lund2024.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2024A%26A...688A..13L"
+TEFF_ADS_URL = None
 
 def main():
     print("Loading Lund+2024 (keystone)...")
@@ -40,7 +41,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(epic[i]),
+            "catalog_id": int(epic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -49,7 +50,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Lund+2024", "mission": "EPIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Lund+2024", 
+                   "catalog": "EPIC",
+                   "instrument": "K2",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

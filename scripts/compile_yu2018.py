@@ -25,7 +25,8 @@ TABLE1   = DATA_DIR / "table1.dat"
 TABLE2   = DATA_DIR / "table2.dat"
 README   = DATA_DIR / "ReadMe.txt"
 OUTPUT   = Path("sources/yu2018.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2018ApJS..236...42Y"
+TEFF_ADS_URL = None
 
 def main():
     for f in (TABLE1, TABLE2, README):
@@ -65,7 +66,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(kic[i]),
+            "catalog_id": int(kic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -74,7 +75,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Yu+2018", "mission": "KIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Yu+2018", 
+                   "catalog": "KIC",
+                   "instrument": "Kepler",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

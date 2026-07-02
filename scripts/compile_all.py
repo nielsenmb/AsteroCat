@@ -23,16 +23,16 @@ SCRIPTS_DIR = Path(__file__).parent
 
 # Ordered list of compile scripts. Add new sources here.
 COMPILE_SCRIPTS = [
-    "compile_yu2018.py",
     "compile_hatt2023.py",
     "compile_hon2021.py",
     "compile_hon2022.py",
-    "compile_sayeed2024.py",
     "compile_karim2025.py",
+    "compile_liagre2025.py",
     "compile_lund2024.py",
     "compile_lund2025.py",
+    "compile_sayeed2024.py",
     "compile_sreenivas2026.py",
-    "compile_liagre2025.py",
+    "compile_yu2018.py",
 ]
 
 
@@ -51,6 +51,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-build",   action="store_true", help="Skip build_db.py after compiling")
     parser.add_argument("--no-resolve", action="store_true", help="Pass --no-resolve to build_db.py")
+    parser.add_argument("--overwrite",  nargs="*", default=None, metavar="SOURCE",
+                        help="Pass --overwrite to build_db.py (no args = overwrite all cached sources)")
     args = parser.parse_args()
 
     passed, failed = [], []
@@ -83,6 +85,9 @@ def main():
     build_args   = [sys.executable, str(build_script)]
     if args.no_resolve:
         build_args.append("--no-resolve")
+    if args.overwrite is not None:
+        build_args.append("--overwrite")
+        build_args.extend(args.overwrite)  # empty list = overwrite all
 
     print(f"\n{'─' * 60}")
     print("  build_db.py")

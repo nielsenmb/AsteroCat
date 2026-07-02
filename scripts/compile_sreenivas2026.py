@@ -19,7 +19,8 @@ from asterocat import utils
 TABLE_URL  = "https://cdsarc.cds.unistra.fr/ftp/J/MNRAS/548/G671/table1.dat"
 README_URL = "https://cdsarc.cds.unistra.fr/ftp/J/MNRAS/548/G671/ReadMe"
 OUTPUT     = Path("sources/sreenivas2026.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2026MNRAS.548ag671S"
+TEFF_ADS_URL = None
 
 def main():
     print("Loading Sreenivas+2026 from CDS...")
@@ -38,7 +39,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(tic[i]),
+            "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -47,7 +48,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Sreenivas+2026", "mission": "TIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Sreenivas+2026", 
+                   "catalog": "TIC",
+                   "instrument": "TESS",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

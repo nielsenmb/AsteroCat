@@ -21,7 +21,8 @@ from asterocat import utils
 SEISMIC = Path("sources/sayeed2024/sayeed_seismic_table.txt")
 STELLAR = Path("sources/sayeed2024/sayeed_stellar_pars_table.txt")
 OUTPUT  = Path("sources/sayeed2024.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025AJ....170..212S"
+TEFF_ADS_URL = None
 
 def main():
     print("Loading Sayeed+2024...")
@@ -45,7 +46,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(kic[i]),
+            "catalog_id": int(kic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -54,7 +55,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Sayeed+2024", "mission": "KIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Sayeed+2024", 
+                   "catalog": "KIC",
+                   "instrument": "Kepler",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

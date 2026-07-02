@@ -32,7 +32,8 @@ TABLE1     = DATA_DIR / "table1.dat"
 TABLE2     = DATA_DIR / "table2.dat"
 README     = DATA_DIR / "ReadMe.txt"
 OUTPUT     = Path("sources/hon2022.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2022AJ....164..135H"
+TEFF_ADS_URL = None
 
 def main():
     print("Loading Hon+2022 (HD-TESS)...")
@@ -63,7 +64,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(tic[i]),
+            "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "teff":       utils.float_for_json(teff[i]),  
@@ -72,7 +73,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Hon+2022", "mission": "TIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Hon+2022", 
+                   "catalog": "TIC",
+                   "instrument": "TESS",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 

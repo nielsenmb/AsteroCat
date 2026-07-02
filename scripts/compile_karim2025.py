@@ -20,7 +20,8 @@ from asterocat import utils
 
 INPUT  = Path("sources/karim2025/karim2025.txt")
 OUTPUT = Path("sources/karim2025.json")
-
+ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2026arXiv260524269K"
+TEFF_ADS_URL = None
 
 def main():
     print("Loading Karim+2025...")
@@ -39,7 +40,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "mission_id": int(tic[i]),
+            "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    None,
             "teff":       utils.float_for_json(teff[i]), 
@@ -48,7 +49,12 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Karim+2025", "mission": "TIC", "targets": targets}, f, indent=2)
+        json.dump({"source": "Karim+2025", 
+                   "catalog": "TIC",
+                   "instrument": "TESS",
+                   "ads_url": ADS_URL, 
+                   "teff_ads_url": TEFF_ADS_URL, 
+                   "targets": targets}, f, indent=2)
     print(f"Written {OUTPUT}  ({len(targets)} entries)")
 
 
