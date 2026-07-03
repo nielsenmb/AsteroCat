@@ -498,6 +498,25 @@
       </div>
     </div>
 
+    <!-- dnu range -->
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>dnu range (muHz)</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div class="range-group">
+          <div class="range-row">
+            <label>min</label>
+            <input id="dnu-min" type="number" placeholder="e.g. 1" step="any">
+          </div>
+          <div class="range-row">
+            <label>max</label>
+            <input id="dnu-max" type="number" placeholder="e.g. 200" step="any">
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- sources -->
     <div class="collapsible">
       <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
@@ -547,10 +566,12 @@
             <th data-col="teff" style="text-align:right">Teff (K)<i class="sort-icon">⬍</i></th>
             <th data-col="e_teff" style="text-align:right">e_Teff (K)<i class="sort-icon">⬍</i></th>
             <th data-col="teff_ads_url">Teff source<i class="sort-icon">⬍</i></th>
+            <th data-col="dnu" style="text-align:right">dnu (muHz)<i class="sort-icon">⬍</i></th>
+            <th data-col="e_dnu" style="text-align:right">e_dnu (muHz)<i class="sort-icon">⬍</i></th>
           </tr>
         </thead>
         <tbody id="results-body">
-          <tr><td colspan="9" class="state-msg">Run a search to load results.</td></tr>
+          <tr><td colspan="11" class="state-msg">Run a search to load results.</td></tr>
         </tbody>
       </table>
     </div>
@@ -571,6 +592,7 @@
         <select class="plot-select" id="x-col">
           <option value="teff">Teff</option>
           <option value="numax">numax</option>
+          <option value="dnu">dnu</option>
         </select>
         <div class="axis-opts">
           <label><input type="checkbox" id="x-log"> log</label>
@@ -582,6 +604,7 @@
         <select class="plot-select" id="y-col">
           <option value="numax">numax</option>
           <option value="teff">Teff</option>
+          <option value="dnu">dnu</option>
         </select>
         <div class="axis-opts">
           <label><input type="checkbox" id="y-log" checked> log</label>
@@ -658,7 +681,7 @@ async function openModal(evt, el) {
 
   $('modal-title').textContent = acatId;
   $('modal-sub').textContent   = 'loading…';
-  $('modal-body').innerHTML    = '<tr><td colspan="9" class="state-msg">Loading…</td></tr>';
+  $('modal-body').innerHTML    = '<tr><td colspan="11" class="state-msg">Loading…</td></tr>';
   $('acat-modal').classList.add('open');
   document.addEventListener('keydown', onModalKey);
 
@@ -668,7 +691,7 @@ async function openModal(evt, el) {
   $('modal-sub').textContent = `${rows.length} publication${rows.length === 1 ? '' : 's'}`;
 
   if (!rows.length) {
-    $('modal-body').innerHTML = '<tr><td colspan="9" class="state-msg">No data.</td></tr>';
+    $('modal-body').innerHTML = '<tr><td colspan="11" class="state-msg">No data.</td></tr>';
     return;
   }
 
@@ -686,6 +709,8 @@ async function openModal(evt, el) {
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
       <td>${adsLink(r.teff_ads_url)}</td>
+      ${fmtCell(r.dnu, 2)}
+      ${fmtCell(r.e_dnu, 3)}
     </tr>`;
   }).join('');
 }
@@ -815,23 +840,49 @@ async function loadSources() {
 // ── alias search (free-text: HD numbers, Bayer names, etc.) ──────────────────
 async function doAliasSearch(q) {
   updateFilterTags();
-  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Searching aliases…</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">Searching aliases…</td></tr>`;
   const res  = await fetch(`/api/search/alias?q=${encodeURIComponent(q)}`);
   const data = await res.json();
 
-  $('result-count').textContent = data.length;
-  $('result-label').textContent = data.length === 1 ? 'result' : 'results';
-  $('prev-btn').disabled = true;
-  $('next-btn').disabled = true;
-  $('export-btn').disabled = data.length === 0;
-
-  if (!data.length) {
-    $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">No results for "${q}".</td></tr>`;
+  if (data.length) {
+    $('result-count').textContent = data.length;
+    $('result-label').textContent = data.length === 1 ? 'result' : 'results';
+    $('prev-btn').disabled = true;
+    $('next-btn').disabled = true;
+    $('export-btn').disabled = false;
+    renderResults({ total: data.length, limit: data.length, offset: 0, results: data });
     return;
   }
 
-  // Reuse renderResults format by wrapping in expected shape
-  renderResults({ total: data.length, limit: data.length, offset: 0, results: data });
+  // Nothing in local aliases — try live SIMBAD
+  $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">Not found locally — querying SIMBAD…</td></tr>`;
+  const sres  = await fetch(`/api/simbad/lookup?q=${encodeURIComponent(q)}`);
+  const sdata = await sres.json();
+
+  $('prev-btn').disabled = true;
+  $('next-btn').disabled = true;
+
+  if (!sdata.found) {
+    $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">No results for "${q}".</td></tr>`;
+    $('result-count').textContent = '0';
+    $('export-btn').disabled = true;
+    return;
+  }
+
+  if (!sdata.in_catalog) {
+    $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">
+      Found on SIMBAD as <span style="color:var(--accent);font-family:var(--font-mono)">${sdata.main_id}</span>
+      but not in this catalog.</td></tr>`;
+    $('result-count').textContent = '0';
+    $('export-btn').disabled = true;
+    return;
+  }
+
+  // SIMBAD found it and it's in the catalog
+  $('result-count').textContent = sdata.results.length;
+  $('result-label').textContent = sdata.results.length === 1 ? 'result' : 'results';
+  $('export-btn').disabled = false;
+  renderResults({ total: sdata.results.length, limit: sdata.results.length, offset: 0, results: sdata.results });
 }
 
 // ── build query params ───────────────────────────────────────────────────────
@@ -863,6 +914,10 @@ function buildParams(offset=0) {
   if (numaxMax) p.set('numax_max', numaxMax);
   if (teffMin)  p.set('teff_min',  teffMin);
   if (teffMax)  p.set('teff_max',  teffMax);
+  const dnuMin   = $('dnu-min').value;
+  const dnuMax   = $('dnu-max').value;
+  if (dnuMin)   p.set('dnu_min',   dnuMin);
+  if (dnuMax)   p.set('dnu_max',   dnuMax);
 
   p.set('limit',  state.limit);
   p.set('offset', offset);
@@ -921,7 +976,7 @@ function renderResults(data) {
 
   const body = $('results-body');
   if (!data.results.length) {
-    body.innerHTML = `<tr><td colspan="9" class="state-msg">No results.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="11" class="state-msg">No results.</td></tr>`;
     return;
   }
 
@@ -944,6 +999,8 @@ function renderResults(data) {
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
       <td>${adsLink(r.teff_ads_url)}</td>
+      ${fmtCell(r.dnu, 2)}
+      ${fmtCell(r.e_dnu, 3)}
     </tr>`;
   }).join('');
 }
@@ -957,6 +1014,8 @@ function updateFilterTags() {
     tags.push(`numax: ${$('numax-min').value||'*'} – ${$('numax-max').value||'*'}`);
   if ($('teff-min').value || $('teff-max').value)
     tags.push(`Teff: ${$('teff-min').value||'*'} – ${$('teff-max').value||'*'}`);
+  if ($('dnu-min').value || $('dnu-max').value)
+    tags.push(`dnu: ${$('dnu-min').value||'*'} – ${$('dnu-max').value||'*'}`);
   const checked = [...document.querySelectorAll('input[name=source]:checked')].length;
   const all     = [...document.querySelectorAll('input[name=source]')].length;
   if (checked < all) tags.push(`sources: ${checked}/${all}`);
@@ -975,7 +1034,7 @@ async function doSearch(offset=0) {
     doAliasSearch(rawQ);
     return;
   }
-  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Searching…</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">Searching…</td></tr>`;
   const params = buildParams(offset);
   const res    = await fetch(`/api/search?${params}`);
   const data   = await res.json();
@@ -993,10 +1052,11 @@ $('reset-btn').addEventListener('click', () => {
   $('q-input').value = '';
   $('numax-min').value = $('numax-max').value = '';
   $('teff-min').value  = $('teff-max').value  = '';
+  $('dnu-min').value   = $('dnu-max').value   = '';
   document.querySelectorAll('input[name=source]').forEach(el => el.checked = true);
   document.querySelectorAll('input[name=instrument]').forEach(el => el.checked = true);
   $('active-filters').innerHTML = '';
-  $('results-body').innerHTML = `<tr><td colspan="9" class="state-msg">Run a search to load results.</td></tr>`;
+  $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">Run a search to load results.</td></tr>`;
   $('result-count').textContent = '—';
   selectedRows.clear(); selectedData.clear(); updateSelectionUI();
 });
@@ -1106,7 +1166,7 @@ let fgData = null;   // foreground (search results)
 window._plotDrawn = false;
 
 // ── column accessors & labels ─────────────────────────────────────────────────
-const COL_LABEL = { numax: 'numax (muHz)', teff: 'Teff (K)' };
+const COL_LABEL = { numax: 'numax (muHz)', teff: 'Teff (K)', dnu: 'dnu (muHz)' };
 
 function getVal(d, col) { return +d[col]; }
 

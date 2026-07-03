@@ -1,0 +1,39 @@
+Name,Catalog,νmax (μHz),νmax_error (μHz),Δν (μHz),Δν_error (μHz),Source,Source ADS,Teff (K),Teff_error (K),Teff Source ,Teff Source ADS,Instrument,Completed entry
+70 Oph A,Flamsteed,4500,,161.7,0.3,Carrier+2006,https://ui.adsabs.harvard.edu/abs/2006A%26A...450..695C,5300,,Carrier+2006,https://ui.adsabs.harvard.edu/abs/2006A%26A...450..695C,HARPS@ESO3.6m,1
+8 UMi,Flamsteed,45.29,0.43,4.8,0.12,Hon+2023,https://ui.adsabs.harvard.edu/abs/2023Natur.618..917H,4847,100,Hon+2023,https://ui.adsabs.harvard.edu/abs/2023Natur.618..917H,Various ground and space based,1
+alpha Cen A,Bayer,,,,,Butler+2004,,,,,,,0
+alpha Cen A,Bayer,2350,,105.9,0.3,Bazot+2007,https://ui.adsabs.harvard.edu/abs/2007CoAst.150..141B,5830,30,Neuforge-Verheecke+1997,https://ui.adsabs.harvard.edu/abs/1997A%26A...328..261N,Various ground based,1
+alpha Cen A,Bayer,2410,130,106.2,0.1,Kjeldsen+2005,https://ui.adsabs.harvard.edu/abs/2005ApJ...635.1281K,,,,,Various ground based,1
+alpha Cen B,Bayer,4090,170,161.38,0.06,Kjeldsen+2005,https://ui.adsabs.harvard.edu/abs/2005ApJ...635.1281K,,,,,Various ground based,1
+alpha For,Bayer,1100,,60,,Kjeldsen+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...682.1370K,,,,,Various ground based,1
+alpha Tau,Bayer,2.2,0.25,,,Farr+20218,https://ui.adsabs.harvard.edu/abs/2018ApJ...865L..20F,3900,,Sheffield+2012,https://ui.adsabs.harvard.edu/abs/2012ApJ...761..161S,Various ground and space based,1
+Arcturus,Common name,,,1.2,,Merline+1999,,,,,,,0
+Arcturus,Common name,4.1,,0.8,,Retter+2002,,,,,,,0
+beta Aql,Bayer,410,,29.6,0.2,Kjeldsen+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...682.1370K,,,,,Various ground based,1
+beta Gem,Bayer,86.8,,,,Hatzes+2007,https://ui.adsabs.harvard.edu/abs/2007ApJ...670L..37H,4850,,McWilliam1990,https://ui.adsabs.harvard.edu/abs/1990ApJS...74.1075M,AJT,1
+beta Gem,Bayer,87,,7.14,0.12,Hatzes+2012,https://ui.adsabs.harvard.edu/abs/2012A%26A...543A..98H,4850,,McWilliam1990,https://ui.adsabs.harvard.edu/abs/1990ApJS...74.1075M,AJT,1
+beta Hyi,Bayer,1000,,57.24,0.16,Bedding+2007,https://ui.adsabs.harvard.edu/abs/2007ApJ...663.1315B,,,,,Various ground based,1
+beta Hyi,Bayer,1000,,57.5,,Kjeldsen+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...682.1370K,,,,,Various ground based,1
+beta Hyi,Bayer,1020,50,56,,Kjeldsen+2005,https://ui.adsabs.harvard.edu/abs/2005ApJ...635.1281K,,,,,UCLES@AAT,1
+beta Vir,Bayer,1500,,72.1,0.1,Carrier+2005,https://ui.adsabs.harvard.edu/abs/2005NewA...10..315C,6140,,Gray+2001,https://ui.adsabs.harvard.edu/abs/2001AJ....121.2159G,CORALIE@LET,1
+delta Pav,Bayer,2330,90,,,Kjeldsen+2005,https://ui.adsabs.harvard.edu/abs/2005ApJ...635.1281K,5540,,,,Various ground based,1
+epsilon Indi,Bayer,5305,176,201.25,0.16,Campante+2024,https://ui.adsabs.harvard.edu/abs/2024A%26A...683L..16C,4649,7,Rains+2020,https://ui.adsabs.harvard.edu/abs/2020MNRAS.493.2377R,ESPRESSO@VLT,1
+epsilon Oph,Bayer,53,,5.3,,,,,,,,,0
+epsilon Tau,Bayer,56,,5,,,,,,,,WIRE,0
+eta Boo,Bayer,730,,39.9,0.1,Carrier+2005,https://ui.adsabs.harvard.edu/abs/2005A%26A...434.1085C,6030,90,Carrier+2005,https://ui.adsabs.harvard.edu/abs/2005A%26A...434.1085C,Various ground based,1
+eta Boo,Bayer,739,,40.4,0.1,Kjeldsen+2003,https://ui.adsabs.harvard.edu/abs/2003AJ....126.1483K,,,,,Various ground based,1
+gamma Cep,Bayer,230,,15,,,,4900,,,,SONG,0
+gamma Psc,Bayer,32,,4.1,0.1,Beck+2015,https://ui.adsabs.harvard.edu/abs/2015A%26A...573A.138B,4940,,Hekker+2007,https://ui.adsabs.harvard.edu/abs/2007A%26A...475.1003H,Various ground and space based,1
+gamma Ser,Bayer,1600,,90,,Kjeldsen+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...682.1370K,,,,,Various ground based,1
+HD131977,HD,,,,,,,4690,,,,,0
+HD191408,HD,,,,,,,5020,,,,,0
+HD219134,HD,4651,301,182.799,0.069,Li+2025,https://ui.adsabs.harvard.edu/abs/2025ApJ...984..125L,4854,66,Li+2025,https://ui.adsabs.harvard.edu/abs/2025ApJ...984..125L,KPF@Keck,1
+HD27536,HD,320,32,20,,Dall+2010,https://ui.adsabs.harvard.edu/abs/2010A%26A...514A..25D,5135,80,Dall+2010,https://ui.adsabs.harvard.edu/abs/2010A%26A...514A..25D,HARPS@ESO3.6m,1
+mu Ara,Bayer,1900,,90,,Bouchy+2005,https://ui.adsabs.harvard.edu/abs/2005A%26A...440..609B,,,,,HARPS@ESO3.6m,1
+nu Indi,Bayer,320,,24.25,0.25,Bedding+2006,https://ui.adsabs.harvard.edu/abs/2006ApJ...647..558B,5300,100,Bedding+2006,https://ui.adsabs.harvard.edu/abs/2006ApJ...647..558B,UCLES@AAT,
+Procyon A,Common name,900,,55.5,,Arentoft+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...687.1180A,,,,,Various ground based,1
+Procyon A,Common name,,,53,,Mosser+1998,https://ui.adsabs.harvard.edu/abs/1998A%26A...340..457M,,,,,CFH,1
+sigma Dra,Bayer,4250,150,182.3,0.3,Hon+2024,https://ui.adsabs.harvard.edu/abs/2024ApJ...975..147H,5290,90,Soubiran+2016,https://ui.adsabs.harvard.edu/abs/2016A%26A...591A.118S,KPF@Keck,1
+tau Cet,Bayer,4490,,169.6,0.2,Teixeira+2009,https://ui.adsabs.harvard.edu/abs/2009A%26A...494..237T,5264,100,Soubiran+1998,https://ui.adsabs.harvard.edu/abs/1998A%26AS..133..221S,HARPS@ESO3.6m,1
+theta1 Tau,Bayer,90,,6.9,0.2,Beck+2015,https://ui.adsabs.harvard.edu/abs/2015A%26A...573A.138B,5000,,Hekker+2007,https://ui.adsabs.harvard.edu/abs/2007A%26A...475.1003H,Various ground and space based,1
+xi Hya,Bayer,87,,7.1,,Frandsen+2002,https://ui.adsabs.harvard.edu/abs/2002A%26A...394L...5F,5000,,,,CORALIE@LET,1

@@ -33,6 +33,7 @@ COMPILE_SCRIPTS = [
     "compile_sayeed2024.py",
     "compile_sreenivas2026.py",
     "compile_yu2018.py",
+    "compile_singletargets.py",
 ]
 
 

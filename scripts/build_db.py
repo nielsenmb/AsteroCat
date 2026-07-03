@@ -60,7 +60,9 @@ CREATE TABLE IF NOT EXISTS targets (
     numax        REAL,
     e_numax      REAL,
     teff         REAL,
-    e_teff       REAL
+    e_teff       REAL,
+    dnu          REAL,
+    e_dnu        REAL
 );
 CREATE INDEX IF NOT EXISTS idx_acat_id    ON targets(acat_id);
 CREATE INDEX IF NOT EXISTS idx_catalog_id ON targets(catalog_id);
@@ -68,6 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_catalog    ON targets(catalog);
 CREATE INDEX IF NOT EXISTS idx_source     ON targets(source);
 CREATE INDEX IF NOT EXISTS idx_numax      ON targets(numax);
 CREATE INDEX IF NOT EXISTS idx_teff       ON targets(teff);
+CREATE INDEX IF NOT EXISTS idx_dnu        ON targets(dnu);
 """
 
 ALIASES_SCHEMA = """
@@ -100,10 +103,14 @@ CATALOG_ALIASES = {
     "epic": "EPIC",
     "hd": "HD", "hip": "HIP", "hr": "HR",
     "bayer": "Bayer",
+    "flamsteed": "Flamsteed",
+    "common name": "Common name",
 }
 
 def normalise_catalog(raw: str) -> str:
-    return CATALOG_ALIASES.get(raw.lower(), raw.upper())
+    # Check aliases first; fall back to the raw string preserving case
+    # (don't uppercase multi-word catalogs like "Common name")
+    return CATALOG_ALIASES.get(raw.lower(), raw)
 
 def make_catalog_id(catalog: str, raw_id) -> str:
     """Build the catalog_id string, e.g. 'TIC_12345' or 'Bayer_alfCenA'."""
@@ -132,7 +139,7 @@ def load_cache(conn: sqlite3.Connection) -> dict[str, str]:
 def load_cached_rows(conn: sqlite3.Connection, source: str) -> list[tuple]:
     rows = conn.execute(
         "SELECT acat_id, catalog_id, catalog, instrument, source, "
-        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff "
+        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu "
         "FROM targets WHERE source = ?", (source,)
     ).fetchall()
     return [tuple(r) for r in rows]
@@ -227,30 +234,151 @@ def resolve_via_simbad(catalog_ids: list[str],
     SIMBAD identifiers for that object — used to populate the aliases table.
     """
     simbad = Simbad()
-    simbad.add_votable_fields("ids")
+    try:
+        simbad.add_votable_fields("ids")  # older astroquery
+    except Exception:
+        pass  # newer astroquery includes ids by default
     simbad.TIMEOUT = 60
     result = {}
 
     for cid in catalog_ids:
-        identifier = cid.replace("_", " ", 1)
+        # Build SIMBAD query: for catalogs SIMBAD natively understands (HD, HIP, HR)
+        # keep the prefix but use a space. For everything else (Bayer, Common name,
+        # Flamsteed, etc.) just use the raw ID part after the first underscore.
+        # Catalogs SIMBAD understands natively as prefixes
+        SIMBAD_NATIVE = {"HD", "HIP", "HR", "TIC", "KIC", "EPIC", "TYC", "2MASS"}
+        # catalog_id format: "<CATALOG>_<raw_id>" where CATALOG may contain spaces
+        # normalise_catalog uppercases, so "Common name" → "COMMON NAME"
+        # We need to find which part of cid is the catalog prefix.
+        # Strategy: strip the catalog prefix (passed in from the caller) from the cid.
+        # cid = make_catalog_id(catalog, raw_id) = f"{catalog}_{raw_id}"
+        # So raw_id = cid[len(catalog)+1:]  but we only have cid here.
+        # Simplest: split on first underscore, but handle multi-word catalogs by
+        # checking against SIMBAD_NATIVE on the first token only.
+        first_token = cid.split("_", 1)[0]
+        raw_id      = cid.split("_", 1)[1] if "_" in cid else cid
+
+        if first_token in SIMBAD_NATIVE:
+            # Strip any accidental double-prefix (e.g. "HD_HD27536" → "HD 27536")
+            if raw_id.upper().startswith(first_token):
+                raw_id = raw_id[len(first_token):].lstrip()
+            identifier = f"{first_token} {raw_id}"
+        else:
+            # Non-native catalog (Bayer, Common name, Flamsteed, etc.)
+            # raw_id after the first underscore IS the identifier SIMBAD understands
+            identifier = raw_id
         try:
             t = simbad.query_object(identifier)
             if t is None or len(t) == 0:
                 log.warning(f"SIMBAD: no match for {identifier}")
                 result[cid] = (None, [])
                 continue
-            main_id = str(t["MAIN_ID"][0]).strip()
-            parts   = main_id.split()
+            # Newer astroquery uses lowercase column names; handle both
+            main_id_col = next((c for c in t.colnames
+                                if c.lower() == "main_id"), None)
+            ids_col     = next((c for c in t.colnames
+                                if c.lower() == "ids"), None)
+            if main_id_col is None:
+                log.warning(f"SIMBAD: no MAIN_ID in response for {identifier} "
+                            f"(columns: {t.colnames})")
+                result[cid] = (None, [])
+                continue
+            main_id   = str(t[main_id_col][0]).strip()
+            parts     = main_id.split()
             canonical = f"{parts[0]}_{parts[-1]}" if len(parts) >= 2 else main_id
-            # Harvest all aliases from the ids field
-            raw_ids = str(t["IDS"][0]).split("|") if "IDS" in t.colnames else []
-            aliases = [a.strip() for a in raw_ids if a.strip()]
+            raw_ids   = str(t[ids_col][0]).split("|") if ids_col else []
+            aliases   = [a.strip() for a in raw_ids if a.strip()]
             result[cid] = (canonical, aliases)
         except Exception as exc:
             log.error(f"SIMBAD query failed for {identifier}: {exc}")
             result[cid] = (None, [])
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Alias enrichment  (optional, --enrich-aliases)
+# ---------------------------------------------------------------------------
+
+def enrich_aliases(conn: sqlite3.Connection, sources: list[str] | None,
+                   log: logging.Logger):
+    """
+    Query SIMBAD for all TIC/KIC/EPIC targets that have no aliases yet,
+    harvest all returned identifiers, and write them to the aliases table.
+
+    sources: if given, only enrich targets from those sources.
+    """
+    where = ""
+    params: list = []
+    if sources:
+        placeholders = ",".join("?" * len(sources))
+        where  = f"AND t.source IN ({placeholders})"
+        params = list(sources)
+
+    # Find targets in MAST catalogs with no aliases beyond their catalog_id
+    rows = conn.execute(
+        f"SELECT DISTINCT t.catalog_id, t.acat_id "
+        f"FROM targets t "
+        f"LEFT JOIN aliases a ON a.acat_id = t.acat_id AND a.origin = 'SIMBAD' "
+        f"WHERE t.catalog IN ('TIC','KIC','EPIC') "
+        f"AND t.acat_id IS NOT NULL "
+        f"AND a.alias IS NULL "
+        f"{where}",
+        params,
+    ).fetchall()
+
+    if not rows:
+        log.info("Alias enrichment: nothing to enrich (all targets already have SIMBAD aliases)")
+        return
+
+    log.info(f"Alias enrichment: querying SIMBAD for {len(rows)} targets...")
+
+    simbad = Simbad()
+    try:
+        simbad.add_votable_fields("ids")  # older astroquery
+    except Exception:
+        pass  # newer astroquery includes ids by default
+    simbad.TIMEOUT = 120
+
+    # Convert catalog_id (e.g. "TIC_12345") to SIMBAD identifier ("TIC 12345")
+    catalog_ids  = [r[0] for r in rows]
+    acat_ids     = {r[0]: r[1] for r in rows}
+    identifiers  = [cid.replace("_", " ", 1) for cid in catalog_ids]
+
+    BATCH = 1000
+    alias_rows = []
+    n_batches  = -(-len(identifiers) // BATCH)
+
+    for i in range(n_batches):
+        chunk_ids   = catalog_ids[i*BATCH:(i+1)*BATCH]
+        chunk_idents = identifiers[i*BATCH:(i+1)*BATCH]
+        log.info(f"  SIMBAD batch {i+1}/{n_batches} ({len(chunk_ids)} IDs)...")
+        try:
+            result = simbad.query_objects(chunk_idents)
+            if result is None:
+                continue
+            for j, row in enumerate(result):
+                cid     = chunk_ids[j]
+                acat_id = acat_ids[cid]
+                if row is None:
+                    continue
+                raw_ids = str(row["IDS"]).split("|") if "IDS" in result.colnames else []
+                for alias in raw_ids:
+                    alias = alias.strip()
+                    if alias:
+                        alias_rows.append((alias, acat_id, "SIMBAD"))
+        except Exception as exc:
+            log.error(f"  SIMBAD batch {i+1} failed: {exc}")
+
+    if alias_rows:
+        conn.executemany(
+            "INSERT OR IGNORE INTO aliases (alias, acat_id, origin) VALUES (?,?,?)",
+            alias_rows,
+        )
+        conn.commit()
+        log.info(f"Alias enrichment: added {len(alias_rows)} aliases")
+    else:
+        log.info("Alias enrichment: no aliases returned")
 
 # ---------------------------------------------------------------------------
 # ACAT ID assignment
@@ -358,6 +486,7 @@ def build(sources_dir: Path, db_path: Path, overrides_path: Path,
                 ads_url, teff_ads_url,
                 t.get("numax"), t.get("e_numax"),
                 t.get("teff"),  t.get("e_teff"),
+                t.get("dnu"),  t.get("e_dnu"),
             ))
 
     log.info(f"Sources: {len(cached_sources)} cached, {len(new_json_files)} to resolve")
@@ -432,26 +561,26 @@ def build(sources_dir: Path, db_path: Path, overrides_path: Path,
 
     conn.executemany(
         "INSERT INTO targets (acat_id, catalog_id, catalog, instrument, source, "
-        "ads_url, teff_ads_url, numax, e_numax, teff, e_teff) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        [r[:11] for r in cached_rows_all],  # trim to 11 cols in case of schema migration
+        "ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        cached_rows_all,  # trim to 11 cols in case of schema migration
     )
 
     # Insert new rows
     new_db_rows = []
     for (catalog_id, catalog, instrument, source,
-         ads_url, teff_ads_url, numax, e_numax, teff, e_teff) in new_rows:
+         ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu) in new_rows:
         canonical = canonical_map.get(catalog_id)
         acat_id   = acat_map.get(canonical) if canonical else None
         new_db_rows.append((
             acat_id, catalog_id, catalog, instrument, source,
-            ads_url, teff_ads_url, numax, e_numax, teff, e_teff,
+            ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu,
         ))
 
     conn.executemany(
         "INSERT INTO targets (acat_id, catalog_id, catalog, instrument, source, "
-        "ads_url, teff_ads_url, numax, e_numax, teff, e_teff) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         new_db_rows,
     )
 
@@ -500,6 +629,22 @@ if __name__ == "__main__":
     p.add_argument("--overwrite", nargs="*", default=None, metavar="SOURCE",
                    help="Ignore cache and re-resolve. No args = overwrite all; "
                         "named sources = overwrite only those")
+    p.add_argument("--enrich-aliases", nargs="*", default=None, metavar="SOURCE",
+                   help="After building, query SIMBAD for common-name aliases of "
+                        "TIC/KIC/EPIC targets with no SIMBAD aliases yet. "
+                        "No args = enrich all; named sources = enrich only those.")
     args = p.parse_args()
     build(args.sources_dir, args.db, args.overrides, args.log,
           not args.no_resolve, args.overwrite)
+
+    if args.enrich_aliases is not None:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s  %(levelname)-8s  %(message)s",
+            handlers=[logging.StreamHandler()],
+        )
+        log = logging.getLogger("build_db")
+        conn = sqlite3.connect(args.db)
+        sources = args.enrich_aliases if args.enrich_aliases else None
+        enrich_aliases(conn, sources, log)
+        conn.close()

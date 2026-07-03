@@ -76,6 +76,8 @@ def api_search():
         numax_max  -- float
         teff_min   -- float
         teff_max   -- float
+        dnu_min    -- float
+        dnu_max    -- float
         limit      -- int (default 200, max 1000)
         offset     -- int (default 0)
         sort_col   -- column to sort by (default: acat_id)
@@ -90,6 +92,8 @@ def api_search():
     numax_max = request.args.get("numax_max", type=float)
     teff_min  = request.args.get("teff_min",  type=float)
     teff_max  = request.args.get("teff_max",  type=float)
+    dnu_min   = request.args.get("dnu_min",   type=float)
+    dnu_max   = request.args.get("dnu_max",   type=float)
     limit     = min(request.args.get("limit",  default=200, type=int), 1000)
     offset    = request.args.get("offset", default=0, type=int)
     sort_col  = request.args.get("sort_col", "acat_id")
@@ -97,7 +101,7 @@ def api_search():
 
     # Whitelist sortable columns to prevent SQL injection
     SORTABLE = {"acat_id", "catalog_id", "catalog", "instrument", "source",
-                "numax", "e_numax", "teff", "e_teff"}
+                "numax", "e_numax", "teff", "e_teff", "dnu", "e_dnu"}
     if sort_col not in SORTABLE:
         sort_col = "acat_id"
     if sort_dir not in ("asc", "desc"):
@@ -128,6 +132,10 @@ def api_search():
         clauses.append("teff >= ?");   params.append(teff_min)
     if teff_max is not None:
         clauses.append("teff <= ?");   params.append(teff_max)
+    if dnu_min is not None:
+        clauses.append("dnu >= ?");    params.append(dnu_min)
+    if dnu_max is not None:
+        clauses.append("dnu <= ?");    params.append(dnu_max)
 
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
@@ -137,7 +145,7 @@ def api_search():
 
     rows = db.execute(
         f"SELECT acat_id, catalog_id, catalog, instrument, source,"
-        f"       ads_url, teff_ads_url, numax, e_numax, teff, e_teff "
+        f"       ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu "
         f"FROM targets {where} "
         f"ORDER BY {sort_col} {sort_dir.upper()}, acat_id "
         f"LIMIT ? OFFSET ?",
@@ -154,7 +162,7 @@ def api_acat(acat_id):
     db = get_db()
     rows = db.execute(
         "SELECT acat_id, catalog_id, catalog, instrument, source, "
-        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff "
+        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu "
         "FROM targets WHERE acat_id = ? "
         "ORDER BY source",
         (acat_id,),
@@ -169,7 +177,7 @@ def api_plot_background():
     db   = get_db()
     n    = request.args.get("n", default=10000, type=int)
     rows = db.execute(
-        "SELECT acat_id, catalog_id, catalog, instrument, numax, teff "
+        "SELECT acat_id, catalog_id, catalog, instrument, numax, teff, dnu "
         "FROM targets "
         "WHERE numax IS NOT NULL AND teff IS NOT NULL "
         "ORDER BY RANDOM() LIMIT ?",
@@ -215,10 +223,14 @@ def api_plot_foreground():
         clauses.append("teff >= ?");   params.append(teff_min)
     if teff_max is not None:
         clauses.append("teff <= ?");   params.append(teff_max)
+    if dnu_min is not None:
+        clauses.append("dnu >= ?");    params.append(dnu_min)
+    if dnu_max is not None:
+        clauses.append("dnu <= ?");    params.append(dnu_max)
 
     where = "WHERE " + " AND ".join(clauses)
     rows  = db.execute(
-        f"SELECT acat_id, catalog_id, catalog, instrument, source, ads_url, teff_ads_url, numax, teff "
+        f"SELECT acat_id, catalog_id, catalog, instrument, source, ads_url, teff_ads_url, numax, teff, dnu "
         f"FROM targets {where} ORDER BY acat_id",
         params,
     ).fetchall()
@@ -249,6 +261,62 @@ def api_search_alias():
         (f"%{query}%",),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+
+@app.get("/api/simbad/lookup")
+def api_simbad_lookup():
+    """
+    Live SIMBAD lookup for a free-text identifier.
+    Returns {found: bool, main_id: str, in_catalog: bool, acat_ids: [...]}
+    """
+    from astroquery.simbad import Simbad
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"found": False})
+
+    try:
+        simbad = Simbad()
+        simbad.add_votable_fields("ids")
+        simbad.TIMEOUT = 10
+        t = simbad.query_object(query)
+        if t is None or len(t) == 0:
+            return jsonify({"found": False})
+
+        main_id   = str(t["MAIN_ID"][0]).strip()
+        raw_ids   = str(t["IDS"][0]).split("|") if "IDS" in t.colnames else []
+        # Normalise SIMBAD aliases to catalog_id format (space → underscore)
+        # so "TIC 317019578" matches "TIC_317019578" in the aliases table
+        def normalise_alias(a):
+            a = a.strip()
+            parts = a.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                return f"{parts[0]}_{parts[1]}"
+            return a
+        all_ids = [normalise_alias(a) for a in raw_ids if a.strip()]
+        all_ids += [a.strip() for a in raw_ids if a.strip()]  # also try original form
+
+        # Check if any alias is in our DB
+        db = get_db()
+        placeholders = ",".join("?" * len(all_ids))
+        rows = db.execute(
+            f"SELECT DISTINCT t.acat_id, t.catalog_id, t.catalog, t.instrument, "
+            f"       t.source, t.ads_url, t.teff_ads_url, t.numax, t.e_numax, "
+            f"       t.teff, t.e_teff "
+            f"FROM aliases a JOIN targets t ON a.acat_id = t.acat_id "
+            f"WHERE a.alias IN ({placeholders}) "
+            f"ORDER BY t.catalog_id, t.source LIMIT 200",
+            all_ids,
+        ).fetchall() if all_ids else []
+
+        return jsonify({
+            "found":      True,
+            "main_id":    main_id,
+            "in_catalog": len(rows) > 0,
+            "results":    [dict(r) for r in rows],
+        })
+    except Exception as exc:
+        return jsonify({"found": False, "error": str(exc)})
 
 
 # ---------------------------------------------------------------------------
