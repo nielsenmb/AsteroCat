@@ -14,6 +14,7 @@ env/
 # AsteroCat runtime files (generated locally, not committed)
 catalog.db
 sources/*.json
+sources/json/*.json
 build.log
 
 # overrides.csv IS committed (manual corrections should be tracked)

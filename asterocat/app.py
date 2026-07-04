@@ -276,38 +276,40 @@ def api_simbad_lookup():
         return jsonify({"found": False})
 
     try:
-        simbad = Simbad()
-        simbad.add_votable_fields("ids")
-        simbad.TIMEOUT = 10
-        t = simbad.query_object(query)
-        if t is None or len(t) == 0:
+        escaped = query.replace("'", "''")
+        tap = Simbad.query_tap(
+            f"SELECT b.main_id, ids.ids "
+            f"FROM ident i "
+            f"JOIN basic b ON i.oidref = b.oid "
+            f"JOIN ids ON b.oid = ids.oidref "
+            f"WHERE i.id = '{escaped}'"
+        )
+        if tap is None or len(tap) == 0:
             return jsonify({"found": False})
 
-        main_id   = str(t["MAIN_ID"][0]).strip()
-        raw_ids   = str(t["IDS"][0]).split("|") if "IDS" in t.colnames else []
-        # Normalise SIMBAD aliases to catalog_id format (space → underscore)
-        # so "TIC 317019578" matches "TIC_317019578" in the aliases table
-        def normalise_alias(a):
-            a = a.strip()
+        main_id = str(tap["main_id"][0]).strip()
+        raw_ids = str(tap["ids"][0]).split("|")
+        all_ids = [a.strip() for a in raw_ids if a.strip() and a.strip() != "--"]
+
+        # Normalise to catalog_id format (e.g. "TIC 317019578" → "TIC_317019578")
+        def norm(a):
             parts = a.split()
-            if len(parts) == 2 and parts[1].isdigit():
+            if len(parts) == 2 and parts[1].replace(".", "").isdigit():
                 return f"{parts[0]}_{parts[1]}"
             return a
-        all_ids = [normalise_alias(a) for a in raw_ids if a.strip()]
-        all_ids += [a.strip() for a in raw_ids if a.strip()]  # also try original form
+        normalised = list({norm(a) for a in all_ids} | set(all_ids))
 
-        # Check if any alias is in our DB
         db = get_db()
-        placeholders = ",".join("?" * len(all_ids))
+        placeholders = ",".join("?" * len(normalised))
         rows = db.execute(
             f"SELECT DISTINCT t.acat_id, t.catalog_id, t.catalog, t.instrument, "
             f"       t.source, t.ads_url, t.teff_ads_url, t.numax, t.e_numax, "
-            f"       t.teff, t.e_teff "
+            f"       t.teff, t.e_teff, t.dnu, t.e_dnu "
             f"FROM aliases a JOIN targets t ON a.acat_id = t.acat_id "
             f"WHERE a.alias IN ({placeholders}) "
             f"ORDER BY t.catalog_id, t.source LIMIT 200",
-            all_ids,
-        ).fetchall() if all_ids else []
+            normalised,
+        ).fetchall() if normalised else []
 
         return jsonify({
             "found":      True,

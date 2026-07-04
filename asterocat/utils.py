@@ -6,6 +6,44 @@ Shared utilities for AsteroCat compile scripts.
 
 import numpy as np
 
+import warnings
+from astropy.io import ascii
+from astropy.units import UnitsWarning
+
+def read_cds(table, readme):
+    """Read a CDS table while suppressing harmless unit warnings."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UnitsWarning)
+        return ascii.read(table, readme=readme)
+    
+def get_parameter(table, name):
+    """Return a standard parameter by its canonical name."""
+    return get_column(table, *param_aliases[name])
+
+param_aliases = {'numax': ["numax", "Numax", "numaxmean"],
+                 'e_numax': ["e_numax", "e_Numax", "e_numaxmean"],
+                 'dnu': ["Dnu", "dnu", "Delnu", "Deltanu", "dnumean"],
+                 'e_dnu': ["e_Dnu", "e_dnu", "e_Delnu", "e_Deltanu", "e_dnumean"],
+                 'teff': ["Teff", "teff", "TeffAPO"],
+                 'e_teff': ["e_Teff", "e_teff", "e_TeffAPO"],}
+
+
+def std_input_validation(numax, dnu, teff):
+    valid = (
+        (
+            (np.isfinite(numax) & (numax > 0))
+            | (np.isfinite(dnu) & (dnu > 0))
+        )
+        & (np.isnan(teff) | (teff > 0))
+    )
+    return valid
+
+def get_column(table, *names):
+    """Return the first matching column name."""
+    for name in names:
+        if name in table.colnames:
+            return col_to_array(table[name])
+    return np.full(len(table), np.nan)
 
 def float_for_json(val) -> float | None:
     """Convert a scalar to float, or None if non-finite or None."""
@@ -16,6 +54,7 @@ def float_for_json(val) -> float | None:
         return f if np.isfinite(f) else None
     except (TypeError, ValueError):
         return None
+
 
 
 def col_to_array(col) -> np.ndarray:
@@ -36,6 +75,8 @@ def make_targets(
     catalog_ids,
     numax,
     e_numax,
+    dnu,
+    e_dnu,
     teff,
     e_teff,
     valid_mask=None,
@@ -47,7 +88,7 @@ def make_targets(
     ----------
     catalog_ids : array-like
         Per-target identifier (integer or string).
-    numax, e_numax, teff, e_teff : array-like
+    numax, e_numax, dnu, e_dnu, teff, e_teff : array-like
         Float arrays; use NaN for missing values.
     valid_mask : boolean array, optional
         If None, defaults to np.isfinite(numax) & (numax > 0).
@@ -58,6 +99,8 @@ def make_targets(
     """
     numax   = np.asarray(numax,   dtype=float)
     e_numax = np.asarray(e_numax, dtype=float)
+    dnu   = np.asarray(dnu,   dtype=float)
+    e_dnu = np.asarray(e_dnu, dtype=float)
     teff    = np.asarray(teff,    dtype=float)
     e_teff  = np.asarray(e_teff,  dtype=float)
 
@@ -71,6 +114,8 @@ def make_targets(
                               type(catalog_ids[i]), np.integer) else str(catalog_ids[i]),
             "numax":   float_for_json(numax[i]),
             "e_numax": float_for_json(e_numax[i]),
+            "dnu":   float_for_json(dnu[i]),
+            "e_dnu": float_for_json(e_dnu[i]),
             "teff":    float_for_json(teff[i]),
             "e_teff":  float_for_json(e_teff[i]),
         })

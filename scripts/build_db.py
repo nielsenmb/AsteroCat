@@ -232,62 +232,40 @@ def resolve_via_simbad(catalog_ids: list[str],
     """
     Return {catalog_id: (canonical_id, [aliases])} where aliases are all
     SIMBAD identifiers for that object — used to populate the aliases table.
+    Uses TAP queries which reliably return IDs in all astroquery versions.
     """
-    simbad = Simbad()
-    try:
-        simbad.add_votable_fields("ids")  # older astroquery
-    except Exception:
-        pass  # newer astroquery includes ids by default
-    simbad.TIMEOUT = 60
     result = {}
+    SIMBAD_NATIVE = {"HD", "HIP", "HR", "TIC", "KIC", "EPIC", "TYC", "2MASS"}
 
-    for cid in catalog_ids:
-        # Build SIMBAD query: for catalogs SIMBAD natively understands (HD, HIP, HR)
-        # keep the prefix but use a space. For everything else (Bayer, Common name,
-        # Flamsteed, etc.) just use the raw ID part after the first underscore.
-        # Catalogs SIMBAD understands natively as prefixes
-        SIMBAD_NATIVE = {"HD", "HIP", "HR", "TIC", "KIC", "EPIC", "TYC", "2MASS"}
-        # catalog_id format: "<CATALOG>_<raw_id>" where CATALOG may contain spaces
-        # normalise_catalog uppercases, so "Common name" → "COMMON NAME"
-        # We need to find which part of cid is the catalog prefix.
-        # Strategy: strip the catalog prefix (passed in from the caller) from the cid.
-        # cid = make_catalog_id(catalog, raw_id) = f"{catalog}_{raw_id}"
-        # So raw_id = cid[len(catalog)+1:]  but we only have cid here.
-        # Simplest: split on first underscore, but handle multi-word catalogs by
-        # checking against SIMBAD_NATIVE on the first token only.
+    def cid_to_identifier(cid):
         first_token = cid.split("_", 1)[0]
         raw_id      = cid.split("_", 1)[1] if "_" in cid else cid
-
         if first_token in SIMBAD_NATIVE:
-            # Strip any accidental double-prefix (e.g. "HD_HD27536" → "HD 27536")
             if raw_id.upper().startswith(first_token):
                 raw_id = raw_id[len(first_token):].lstrip()
-            identifier = f"{first_token} {raw_id}"
-        else:
-            # Non-native catalog (Bayer, Common name, Flamsteed, etc.)
-            # raw_id after the first underscore IS the identifier SIMBAD understands
-            identifier = raw_id
+            return f"{first_token} {raw_id}"
+        return raw_id
+
+    for cid in catalog_ids:
+        identifier = cid_to_identifier(cid)
+        escaped    = identifier.replace("'", "''")
         try:
-            t = simbad.query_object(identifier)
-            if t is None or len(t) == 0:
+            tap = Simbad.query_tap(
+                f"SELECT b.main_id, ids.ids "
+                f"FROM ident i "
+                f"JOIN basic b ON i.oidref = b.oid "
+                f"JOIN ids ON b.oid = ids.oidref "
+                f"WHERE i.id = '{escaped}'"
+            )
+            if tap is None or len(tap) == 0:
                 log.warning(f"SIMBAD: no match for {identifier}")
                 result[cid] = (None, [])
                 continue
-            # Newer astroquery uses lowercase column names; handle both
-            main_id_col = next((c for c in t.colnames
-                                if c.lower() == "main_id"), None)
-            ids_col     = next((c for c in t.colnames
-                                if c.lower() == "ids"), None)
-            if main_id_col is None:
-                log.warning(f"SIMBAD: no MAIN_ID in response for {identifier} "
-                            f"(columns: {t.colnames})")
-                result[cid] = (None, [])
-                continue
-            main_id   = str(t[main_id_col][0]).strip()
+            main_id   = str(tap["main_id"][0]).strip()
             parts     = main_id.split()
             canonical = f"{parts[0]}_{parts[-1]}" if len(parts) >= 2 else main_id
-            raw_ids   = str(t[ids_col][0]).split("|") if ids_col else []
-            aliases   = [a.strip() for a in raw_ids if a.strip()]
+            raw_ids   = str(tap["ids"][0]).split("|")
+            aliases   = [a.strip() for a in raw_ids if a.strip() and a.strip() != "--"]
             result[cid] = (canonical, aliases)
         except Exception as exc:
             log.error(f"SIMBAD query failed for {identifier}: {exc}")
@@ -343,33 +321,55 @@ def enrich_aliases(conn: sqlite3.Connection, sources: list[str] | None,
     # Convert catalog_id (e.g. "TIC_12345") to SIMBAD identifier ("TIC 12345")
     catalog_ids  = [r[0] for r in rows]
     acat_ids     = {r[0]: r[1] for r in rows}
-    identifiers  = [cid.replace("_", " ", 1) for cid in catalog_ids]
 
-    BATCH = 1000
+    SIMBAD_NATIVE = {"HD", "HIP", "HR", "TIC", "KIC", "EPIC", "TYC", "2MASS"}
+    def cid_to_ident(cid):
+        first = cid.split("_", 1)[0]
+        raw   = cid.split("_", 1)[1] if "_" in cid else cid
+        if first in SIMBAD_NATIVE:
+            if raw.upper().startswith(first):
+                raw = raw[len(first):].lstrip()
+            return f"{first} {raw}"
+        return raw
+
+    identifiers = [cid_to_ident(cid) for cid in catalog_ids]
+
+    BATCH     = 500   # TAP IN clause has limits; keep batches smaller
     alias_rows = []
     n_batches  = -(-len(identifiers) // BATCH)
 
     for i in range(n_batches):
-        chunk_ids   = catalog_ids[i*BATCH:(i+1)*BATCH]
+        chunk_ids    = catalog_ids[i*BATCH:(i+1)*BATCH]
         chunk_idents = identifiers[i*BATCH:(i+1)*BATCH]
         log.info(f"  SIMBAD batch {i+1}/{n_batches} ({len(chunk_ids)} IDs)...")
         try:
-            result = simbad.query_objects(chunk_idents)
-            if result is None:
+            escaped  = [s.replace("'", "''") for s in chunk_idents]
+            id_list  = ", ".join(f"'{s}'" for s in escaped)
+            tap = Simbad.query_tap(
+                f"SELECT i.id as queried_id, b.main_id, ids.ids "
+                f"FROM ident i "
+                f"JOIN basic b ON i.oidref = b.oid "
+                f"JOIN ids ON b.oid = ids.oidref "
+                f"WHERE i.id IN ({id_list})"
+            )
+            if tap is None or len(tap) == 0:
                 continue
-            for j, row in enumerate(result):
-                cid     = chunk_ids[j]
-                acat_id = acat_ids[cid]
-                if row is None:
+            ident_to_acat = {ident: acat_ids[cid]
+                             for cid, ident in zip(chunk_ids, chunk_idents)}
+            for row in tap:
+                queried_id = str(row["queried_id"]).strip()
+                acat_id    = ident_to_acat.get(queried_id)
+                if not acat_id:
                     continue
-                raw_ids = str(row["IDS"]).split("|") if "IDS" in result.colnames else []
-                for alias in raw_ids:
+                ids_val = str(row["ids"]).strip()
+                if not ids_val or ids_val == "--":
+                    continue
+                for alias in ids_val.split("|"):
                     alias = alias.strip()
-                    if alias:
+                    if alias and alias != "--":
                         alias_rows.append((alias, acat_id, "SIMBAD"))
         except Exception as exc:
             log.error(f"  SIMBAD batch {i+1} failed: {exc}")
-
     if alias_rows:
         conn.executemany(
             "INSERT OR IGNORE INTO aliases (alias, acat_id, origin) VALUES (?,?,?)",
