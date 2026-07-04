@@ -20,12 +20,12 @@ def get_parameter(table, name):
     """Return a standard parameter by its canonical name."""
     return get_column(table, *param_aliases[name])
 
-param_aliases = {'numax': ["numax", "Numax", "numaxmean"],
-                 'e_numax': ["e_numax", "e_Numax", "e_numaxmean"],
-                 'dnu': ["Dnu", "dnu", "Delnu", "Deltanu", "dnumean"],
-                 'e_dnu': ["e_Dnu", "e_dnu", "e_Delnu", "e_Deltanu", "e_dnumean"],
-                 'teff': ["Teff", "teff", "TeffAPO"],
-                 'e_teff': ["e_Teff", "e_teff", "e_TeffAPO"],}
+param_aliases = {'numax': ["numax", "Numax", "numaxmean", "Numax"],
+                 'e_numax': ["e_numax", "e_Numax", "e_numaxmean", "e_Numax"],
+                 'dnu': ["Dnu", "dnu", "Delnu", "Deltanu", "dnumean", "DNu"],
+                 'e_dnu': ["e_Dnu", "e_dnu", "e_Delnu", "e_Deltanu", "e_dnumean", "e_DNu"],
+                 'teff': ["Teff", "teff", "TeffAPO", "Teff"],
+                 'e_teff': ["e_Teff", "e_teff", "e_TeffAPO", "e_Teff"],}
 
 
 def std_input_validation(numax, dnu, teff):

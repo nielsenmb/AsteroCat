@@ -508,10 +508,10 @@
 
     <!-- instrument filter -->
     <div class="collapsible">
-      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+      <button class="collapse-toggle" aria-expanded="false" onclick="toggleSection(this)">
         <span>Instrument</span><span class="chevron">▾</span>
       </button>
-      <div class="collapse-body">
+      <div class="collapse-body hidden">
         <button class="toggle-all-btn" onclick="toggleAll('instrument')">select / deselect all</button>
         <div id="instrument-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
       </div>
@@ -519,10 +519,10 @@
 
     <!-- sources -->
     <div class="collapsible">
-      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+      <button class="collapse-toggle" aria-expanded="false" onclick="toggleSection(this)">
         <span>Sources</span><span class="chevron">▾</span>
       </button>
-      <div class="collapse-body">
+      <div class="collapse-body hidden">
         <button class="toggle-all-btn" onclick="toggleAll('source')">select / deselect all</button>
         <div id="source-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
       </div>
@@ -1044,8 +1044,8 @@ async function doSearch(offset=0) {
 // ── events ───────────────────────────────────────────────────────────────────
 $('search-btn').addEventListener('click', () => doSearch(0));
 
-$('q-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch(0);
+['q-input','numax-min','numax-max','dnu-min','dnu-max','teff-min','teff-max'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(0); });
 });
 
 $('reset-btn').addEventListener('click', () => {
@@ -1192,6 +1192,8 @@ async function drawPlot() {
 
   // Fetch foreground using current search filters
   const params = buildParams(0);
+  params.set('x_col', xCol);
+  params.set('y_col', yCol);
   const r2 = await fetch(`/api/plot/foreground?${params}`);
   fgData   = await r2.json();
 

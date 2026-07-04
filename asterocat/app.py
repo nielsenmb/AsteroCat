@@ -199,8 +199,19 @@ def api_plot_foreground():
     teff_min    = request.args.get("teff_min",  type=float)
     teff_max    = request.args.get("teff_max",  type=float)
 
+    dnu_min     = request.args.get("dnu_min",   type=float)
+    dnu_max     = request.args.get("dnu_max",   type=float)
+    x_col       = request.args.get("x_col", "teff")
+    y_col       = request.args.get("y_col", "numax")
+
+    # Whitelist plot columns
+    PLOT_COLS = {"numax", "teff", "dnu"}
+    if x_col not in PLOT_COLS: x_col = "teff"
+    if y_col not in PLOT_COLS: y_col = "numax"
+
     clauses, params = [], []
-    clauses.append("numax IS NOT NULL AND teff IS NOT NULL")
+    # Only require the selected axes to be non-null
+    clauses.append(f"{x_col} IS NOT NULL AND {y_col} IS NOT NULL")
 
     if q:
         q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())

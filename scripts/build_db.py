@@ -1,7 +1,7 @@
 """
 build_db.py
 -----------
-Scans `sources/` for canonical JSON files, resolves catalog IDs to ACAT IDs,
+Scans `sources/json/` for canonical JSON files, resolves catalog IDs to ACAT IDs,
 and builds catalog.db.
 
 JSON schema per source file:
@@ -26,7 +26,7 @@ Resolution order:
   5. Unresolved   -- acat_id left NULL, logged to build.log
 
 Run:
-    python scripts/build_db.py [--sources-dir sources] [--db catalog.db]
+    python scripts/build_db.py [--sources-dir sources/json] [--db catalog.db]
                                [--overrides overrides.csv] [--log build.log]
                                [--no-resolve] [--overwrite [SOURCE ...]]
 """
@@ -620,7 +620,7 @@ def build(sources_dir: Path, db_path: Path, overrides_path: Path,
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Build the AsteroCat SQLite database.")
-    p.add_argument("--sources-dir", default="sources",       type=Path)
+    p.add_argument("--sources-dir", default="sources/json", type=Path)
     p.add_argument("--db",          default="catalog.db",    type=Path)
     p.add_argument("--overrides",   default="overrides.csv", type=Path)
     p.add_argument("--log",         default="build.log",     type=Path)
