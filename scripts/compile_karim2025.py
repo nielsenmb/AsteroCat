@@ -18,11 +18,14 @@ import numpy as np
 from pathlib import Path
 from asterocat import utils
 
-INPUT  = Path("sources/karim2025/karim2025.txt")
-OUTPUT = Path("sources/karim2025.json")
+INPUT  = Path("sources/data/karim2025/karim2025.txt")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2026arXiv260524269K"
 TEFF_ADS_URL = None
+INSTRUMENT   = 'TESS'
+CATALOG      = 'TIC'
+SOURCE       = 'Karim+2025'
 
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 def main():
     print("Loading Karim+2025...")
     data = np.genfromtxt(
@@ -51,15 +54,15 @@ def main():
             "e_teff":     None,
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
-        json.dump({"source": "Karim+2025", 
-                   "catalog": "TIC",
-                   "instrument": "TESS",
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
+        json.dump({"source": SOURCE, 
+                   "catalog": CATALOG,
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

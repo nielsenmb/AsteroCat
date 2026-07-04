@@ -26,15 +26,17 @@ from asterocat import utils
 warnings.filterwarnings("ignore")
 
 
-TABLE        = Path("sources/hatt2023/catalog.dat")
-README       = Path("sources/hatt2023/ReadMe.txt")
-OUTPUT       = Path("sources/hatt2023.json")
+TABLE        = Path("sources/data/hatt2023/catalog.dat")
+README       = Path("sources/data/hatt2023/ReadMe.txt")
 ADS_URL      = 'https://ui.adsabs.harvard.edu/abs/2023A%26A...669A..67H'
 TEFF_ADS_URL = None
 SOURCE       = 'Hatt+2023'
 INSTRUMENT   = 'TESS'
 CATALOG      = 'TIC'
 BATCH        = 1000
+
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
+
 
 def chunks(lst, n):
     for i in range(0, len(lst), n):

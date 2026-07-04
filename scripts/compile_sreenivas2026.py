@@ -24,7 +24,7 @@ INSTRUMENT   = 'TESS'
 CATALOG      = 'TIC'
 SOURCE       = 'Sreenivas+2026'
 
-output       = Path(f"sources/{SOURCE}.lower().replace('+','').json")
+output       = Path(f"sources/json/{SOURCE}.lower().replace('+','').json")
 
 def main():
     print("Loading Sreenivas+2026 from CDS...")

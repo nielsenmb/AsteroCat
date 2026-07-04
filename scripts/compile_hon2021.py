@@ -19,14 +19,16 @@ from pathlib import Path
 from astropy.io import ascii
 from asterocat import utils
 
-DATA_DIR = Path("sources/hon2021")
+DATA_DIR = Path("sources/data/hon2021")
 TABLE1   = DATA_DIR / "table1.dat"
 README   = DATA_DIR / "ReadMe.txt"
-OUTPUT   = Path("sources/hon2021.json")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2021ApJ...919..131H"
 TEFF_ADS_URL = None
+SOURCE = "Hon+2021"
+INSTRUMENT = "TESS"
+CATALOG = "TIC"
 
-# Notes: Hon+2021 does not have dnu values.
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     for f in (TABLE1, README):
@@ -73,15 +75,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
-        json.dump({"source": "Hon+2021", 
-                   "catalog": "TIC", 
-                   "instrument": "TESS",
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
+        json.dump({"source": SOURCE, 
+                   "catalog": CATALOG, 
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL,
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

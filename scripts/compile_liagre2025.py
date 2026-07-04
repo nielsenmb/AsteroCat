@@ -17,11 +17,15 @@ from pathlib import Path
 from astropy.io import ascii
 from asterocat import utils
 
-CATALOG = Path("sources/liagre2025/catalog.dat")
-README  = Path("sources/liagre2025/ReadMe.txt")
-OUTPUT  = Path("sources/liagre2025.json")
+CATALOG = Path("sources/data/liagre2025/catalog.dat")
+README  = Path("sources/data/liagre2025/ReadMe.txt")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025A%26A...702A.144L"
 TEFF_ADS_URL = None
+INSTRUMENT   = 'TESS'
+CATALOG      = 'TIC'
+SOURCE = "Liagre+2025"
+
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Liagre+2025...")
@@ -51,15 +55,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
         json.dump({"source": "Liagre+2025", 
-                   "catalog": "TIC",
-                   "instrument": "TESS",
+                   "catalog": CATALOG,
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

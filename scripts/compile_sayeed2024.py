@@ -18,11 +18,15 @@ from astropy.io import ascii
 from astropy.table import join
 from asterocat import utils
 
-SEISMIC = Path("sources/sayeed2024/sayeed_seismic_table.txt")
-STELLAR = Path("sources/sayeed2024/sayeed_stellar_pars_table.txt")
-OUTPUT  = Path("sources/sayeed2024.json")
+SEISMIC = Path("sources/data/sayeed2024/sayeed_seismic_table.txt")
+STELLAR = Path("sources/data/sayeed2024/sayeed_stellar_pars_table.txt")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025AJ....170..212S"
 TEFF_ADS_URL = None
+INSTRUMENT   = 'Kepler'
+CATALOG      = 'KIC'
+SOURCE = "Sayeed+2024"
+
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Sayeed+2024...")
@@ -58,15 +62,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
-        json.dump({"source": "Sayeed+2024", 
-                   "catalog": "KIC",
-                   "instrument": "Kepler",
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
+        json.dump({"source": SOURCE, 
+                   "catalog": CATALOG,
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

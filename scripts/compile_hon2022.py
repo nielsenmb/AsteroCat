@@ -27,13 +27,17 @@ from astropy.io import ascii
 from astropy.table import join
 from asterocat import utils
 
-DATA_DIR   = Path("sources/hon2022")
+DATA_DIR   = Path("sources/data/hon2022")
 TABLE1     = DATA_DIR / "table1.dat"
 TABLE2     = DATA_DIR / "table2.dat"
 README     = DATA_DIR / "ReadMe.txt"
-OUTPUT     = Path("sources/hon2022.json")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2022AJ....164..135H"
 TEFF_ADS_URL = None
+SOURCE = "Hon+2022"
+INSTRUMENT = "TESS"
+CATALOG = "TIC"
+
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Hon+2022 (HD-TESS)...")
@@ -75,15 +79,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
         json.dump({"source": "Hon+2022", 
                    "catalog": "TIC",
                    "instrument": "TESS",
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

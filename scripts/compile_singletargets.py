@@ -56,9 +56,9 @@ def main():
         targets = []
         targets.append(target)
  
-        OUTPUT = Path(f"sources/{SOURCE.replace('+','').lower()}.json")
+        output = Path(f"sources/json/{SOURCE.replace('+','').lower()}.json")
 
-        with open(OUTPUT, "w") as f:
+        with open(output, "w") as f:
             json.dump({"source": SOURCE,
                        "catalog": CATALOG,
                        "instrument": INSTRUMENT,

@@ -19,13 +19,15 @@ import pandas as pd
 from pathlib import Path
 from asterocat import utils
 
-INPUT  = Path("sources/lund2025/lund_luminaries.csv")
-OUTPUT = Path("sources/lund2025.json")
+INPUT  = Path("sources/data/lund2025/lund_luminaries.csv")
+OUTPUT = Path("sources/data/lund2025.json")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025A%26A...701A.285L"
 TEFF_ADS_URL = None
+INSTRUMENT   = 'TESS'
+CATALOG      = 'TIC'
+SOURCE = "Lund+2025"
 
-def float_for_json(val):
-    return float(val) if np.isfinite(val) else None
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Lund+2025 (luminaries)...")
@@ -57,9 +59,9 @@ def main():
 
     OUTPUT.parent.mkdir(exist_ok=True)
     with open(OUTPUT, "w") as f:
-        json.dump({"source": "Lund+2025", 
-                   "catalog": "TIC",
-                   "instrument": "TESS",
+        json.dump({"source": SOURCE, 
+                   "catalog": CATALOG,
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)

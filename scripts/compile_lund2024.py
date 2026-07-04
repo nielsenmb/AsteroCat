@@ -19,10 +19,14 @@ import pandas as pd
 from pathlib import Path
 from asterocat import utils
 
-INPUT  = Path("sources/lund2024/lund_keystone.csv")
-OUTPUT = Path("sources/lund2024.json")
+INPUT  = Path("sources/data/lund2024/lund_keystone.csv")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2024A%26A...688A..13L"
 TEFF_ADS_URL = None
+INSTRUMENT   = 'K2'
+CATALOG      = 'EPIC'
+SOURCE = "Lund+2024"
+
+output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Lund+2024 (keystone)...")
@@ -52,15 +56,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),  
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
-        json.dump({"source": "Lund+2024", 
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
+        json.dump({"source": SOURCE, 
                    "catalog": "EPIC",
-                   "instrument": "K2",
+                   "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":
