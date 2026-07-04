@@ -18,23 +18,13 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+import glob
+import os
 
 SCRIPTS_DIR = Path(__file__).parent
 
 # Ordered list of compile scripts. Add new sources here.
-COMPILE_SCRIPTS = [
-    "compile_hatt2023.py",
-    "compile_hon2021.py",
-    "compile_hon2022.py",
-    "compile_karim2025.py",
-    "compile_liagre2025.py",
-    "compile_lund2024.py",
-    "compile_lund2025.py",
-    "compile_sayeed2024.py",
-    "compile_sreenivas2026.py",
-    "compile_yu2018.py",
-    "compile_singletargets.py",
-]
+COMPILE_SCRIPTS = glob.glob(os.path.join(*[SCRIPTS_DIR, 'source_scripts/compile_*.py']))
 
 
 def run_script(script: Path, label: str) -> bool:

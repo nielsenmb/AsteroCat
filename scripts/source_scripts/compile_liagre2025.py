@@ -17,24 +17,24 @@ from pathlib import Path
 from astropy.io import ascii
 from asterocat import utils
 
-CATALOG = Path("sources/data/liagre2025/catalog.dat")
+TABLE = Path("sources/data/liagre2025/catalog.dat")
 README  = Path("sources/data/liagre2025/ReadMe.txt")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025A%26A...702A.144L"
 TEFF_ADS_URL = None
-INSTRUMENT   = 'TESS'
-CATALOG      = 'TIC'
+INSTRUMENT   = 'Kepler'
+CATALOG      = 'KIC'
 SOURCE = "Liagre+2025"
 
 output = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     print("Loading Liagre+2025...")
-    table = ascii.read(CATALOG, readme=README, format="cds")
-
+    table = ascii.read(TABLE, readme=README, format="cds")
+    
     numax = np.array(table["numax"], dtype=float)
     dnu = np.array(table["Dnu"], dtype=float)
     teff  = np.array(table["Teff"],  dtype=float)
-    tic   = np.array(table["TIC"],   dtype=int)
+    kic   = np.array(table["KIC"],   dtype=int)
 
     e_numax = np.array(table["e_numax"], dtype=float) if "e_numax" in table.colnames else np.full(len(table), np.nan)
     e_dnu = np.array(table["e_Dnu"], dtype=float) if "e_Dnu" in table.colnames else np.full(len(table), np.nan)
@@ -46,7 +46,7 @@ def main():
     targets = []
     for i in np.where(valid)[0]:
         targets.append({
-            "catalog_id": int(tic[i]),
+            "catalog_id": int(kic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
             "dnu":        utils.float_for_json(dnu[i]), 

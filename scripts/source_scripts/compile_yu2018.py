@@ -30,7 +30,7 @@ INSTRUMENT   = 'Kepler'
 CATALOG      = 'KIC'
 SOURCE       = 'Yu+2018'
 
-output       = Path(f"sources/json/{SOURCE}.lower().replace('+','').json")
+output       = Path(f"sources/json/{SOURCE.lower().replace('+','')}.json")
 
 def main():
     for f in (TABLE1, TABLE2, README):

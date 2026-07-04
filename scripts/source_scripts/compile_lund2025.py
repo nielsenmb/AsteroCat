@@ -20,7 +20,6 @@ from pathlib import Path
 from asterocat import utils
 
 INPUT  = Path("sources/data/lund2025/lund_luminaries.csv")
-OUTPUT = Path("sources/data/lund2025.json")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2025A%26A...701A.285L"
 TEFF_ADS_URL = None
 INSTRUMENT   = 'TESS'
@@ -57,15 +56,15 @@ def main():
             "e_teff":     utils.float_for_json(e_teff[i]),  
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
-    with open(OUTPUT, "w") as f:
+    output.parent.mkdir(exist_ok=True)
+    with open(output, "w") as f:
         json.dump({"source": SOURCE, 
                    "catalog": CATALOG,
                    "instrument": INSTRUMENT,
                    "ads_url": ADS_URL, 
                    "teff_ads_url": TEFF_ADS_URL, 
                    "targets": targets}, f, indent=2)
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":

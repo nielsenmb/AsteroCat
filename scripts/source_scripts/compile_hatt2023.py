@@ -83,7 +83,7 @@ def main():
             "e_teff":     utils.float_for_json(row["e_Teff"])
         })
 
-    OUTPUT.parent.mkdir(exist_ok=True)
+    output.parent.mkdir(exist_ok=True)
     payload = {"source": SOURCE, 
                "catalog":    CATALOG,
                "instrument": INSTRUMENT,
@@ -91,10 +91,10 @@ def main():
                "teff_ads_url": TEFF_ADS_URL,
                "targets": targets}
     
-    with open(OUTPUT, "w") as f:
+    with open(output, "w") as f:
         json.dump(payload, f, indent=2)
 
-    print(f"Written {OUTPUT}  ({len(targets)} entries)")
+    print(f"Written {output}  ({len(targets)} entries)")
 
 
 if __name__ == "__main__":
