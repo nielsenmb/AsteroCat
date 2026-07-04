@@ -15,10 +15,8 @@ Outputs:
 """
 
 import json
-import numpy as np
 import pandas as pd
 from pathlib import Path
-from asterocat import utils
 
 INPUT = Path("sources/single_targets/single_targets.csv")
 

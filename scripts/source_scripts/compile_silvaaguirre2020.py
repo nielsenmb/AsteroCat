@@ -1,7 +1,5 @@
 import json
-import numpy as np
 from pathlib import Path
-from astropy.io import ascii
 from asterocat import utils
 
 TABLE        = "https://cdsarc.cds.unistra.fr/ftp/J/ApJ/889/L34/table1.dat"

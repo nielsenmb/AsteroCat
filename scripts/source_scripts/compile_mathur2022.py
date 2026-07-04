@@ -1,7 +1,6 @@
 
 import json
 from pathlib import Path
-import numpy as np
 from asterocat import utils
 
 TABLE        = "https://cdsarc.cds.unistra.fr/ftp/J/A+A/657/A31/table1.dat"

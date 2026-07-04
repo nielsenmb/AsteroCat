@@ -1,9 +1,6 @@
 import json
 from pathlib import Path
-from astropy.io import ascii
 from asterocat import utils
-import warnings
-from astropy.units import UnitsWarning
 
 TABLE = "https://cdsarc.cds.unistra.fr/ftp/J/A+A/650/A115/tablec1.dat.gz"
 README = "https://cdsarc.cds.unistra.fr/ftp/J/A+A/650/A115/ReadMe"
