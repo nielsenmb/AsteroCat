@@ -468,6 +468,25 @@
       </div>
     </div>
 
+    <!-- dnu range -->
+    <div class="collapsible">
+      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
+        <span>dnu range (muHz)</span><span class="chevron">▾</span>
+      </button>
+      <div class="collapse-body">
+        <div class="range-group">
+          <div class="range-row">
+            <label>min</label>
+            <input id="dnu-min" type="number" placeholder="e.g. 1" step="any">
+          </div>
+          <div class="range-row">
+            <label>max</label>
+            <input id="dnu-max" type="number" placeholder="e.g. 200" step="any">
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- teff range -->
     <div class="collapsible">
       <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
@@ -495,25 +514,6 @@
       <div class="collapse-body">
         <button class="toggle-all-btn" onclick="toggleAll('instrument')">select / deselect all</button>
         <div id="instrument-list"><span style="color:var(--muted);font-size:12px">loading…</span></div>
-      </div>
-    </div>
-
-    <!-- dnu range -->
-    <div class="collapsible">
-      <button class="collapse-toggle" aria-expanded="true" onclick="toggleSection(this)">
-        <span>dnu range (muHz)</span><span class="chevron">▾</span>
-      </button>
-      <div class="collapse-body">
-        <div class="range-group">
-          <div class="range-row">
-            <label>min</label>
-            <input id="dnu-min" type="number" placeholder="e.g. 1" step="any">
-          </div>
-          <div class="range-row">
-            <label>max</label>
-            <input id="dnu-max" type="number" placeholder="e.g. 200" step="any">
-          </div>
-        </div>
       </div>
     </div>
 
@@ -563,11 +563,11 @@
             <th data-col="instrument">Instrument<i class="sort-icon">⬍</i></th>
             <th data-col="numax" style="text-align:right">numax (muHz)<i class="sort-icon">⬍</i></th>
             <th data-col="e_numax" style="text-align:right">e_numax (muHz)<i class="sort-icon">⬍</i></th>
+            <th data-col="dnu" style="text-align:right">dnu (muHz)<i class="sort-icon">⬍</i></th>
+            <th data-col="e_dnu" style="text-align:right">e_dnu (muHz)<i class="sort-icon">⬍</i></th>
             <th data-col="teff" style="text-align:right">Teff (K)<i class="sort-icon">⬍</i></th>
             <th data-col="e_teff" style="text-align:right">e_Teff (K)<i class="sort-icon">⬍</i></th>
             <th data-col="teff_ads_url">Teff source<i class="sort-icon">⬍</i></th>
-            <th data-col="dnu" style="text-align:right">dnu (muHz)<i class="sort-icon">⬍</i></th>
-            <th data-col="e_dnu" style="text-align:right">e_dnu (muHz)<i class="sort-icon">⬍</i></th>
           </tr>
         </thead>
         <tbody id="results-body">
@@ -706,11 +706,11 @@ async function openModal(evt, el) {
       <td>${r.instrument || r.mission}</td>
       ${fmtCell(r.numax, 2)}
       ${fmtCell(r.e_numax, 3)}
+      ${fmtCell(r.dnu, 2)}
+      ${fmtCell(r.e_dnu, 3)}
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
       <td>${adsLink(r.teff_ads_url)}</td>
-      ${fmtCell(r.dnu, 2)}
-      ${fmtCell(r.e_dnu, 3)}
     </tr>`;
   }).join('');
 }
@@ -988,7 +988,7 @@ function renderResults(data) {
     return `<tr class="result-row${selClass}" data-key="${rowKey}" onclick="toggleRowFromClick(event, this)">
       <td class="cb-col"><input type="checkbox" class="row-cb" ${checked} onclick="toggleRow(event, this)"></td>
       <td class="id-cell"><a href="#" class="acat-link" data-id="${r.acat_id}" onclick="openModal(event,this)">${r.acat_id ?? '—'}</a></td>
-      <td class="id-cell">${r.catalog_id.replace('_', '')}</td>
+      <td class="id-cell">${r.catalog_id.includes('_') ? r.catalog_id.split('_').slice(1).join('_') : r.catalog_id}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
               width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}${adsLink(r.ads_url)}
@@ -996,11 +996,11 @@ function renderResults(data) {
       <td>${instrument(r)}</td>
       ${fmtCell(r.numax, 2)}
       ${fmtCell(r.e_numax, 3)}
+      ${fmtCell(r.dnu, 2)}
+      ${fmtCell(r.e_dnu, 3)}
       ${fmtCell(r.teff, 1)}
       ${fmtCell(r.e_teff, 1)}
       <td>${adsLink(r.teff_ads_url)}</td>
-      ${fmtCell(r.dnu, 2)}
-      ${fmtCell(r.e_dnu, 3)}
     </tr>`;
   }).join('');
 }
