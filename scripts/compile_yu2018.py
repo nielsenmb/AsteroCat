@@ -53,6 +53,8 @@ def main():
 
     numax   = to_float(merged["numax"])
     e_numax = to_float(merged["e_numax"])
+    dnu   = to_float(merged["Delnu"])
+    e_dnu = to_float(merged["e_Delnu"])
 
     
     teff   = to_float(merged["Teff"])
@@ -60,8 +62,8 @@ def main():
 
     kic   = np.array(merged["KIC"], dtype=int)
     
-    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
-    print(f"  {valid.sum()} / {len(merged)} rows with finite non-zero numax")
+    valid = (((np.isfinite(numax) & (numax > 0)) | (np.isfinite(dnu) & (dnu > 0))) & (np.isnan(teff) | (teff > 0)))
+    print(f"  {valid.sum()} / {len(merged)} rows with finite non-zero numax or dnu")
 
     targets = []
     for i in np.where(valid)[0]:
@@ -69,6 +71,8 @@ def main():
             "catalog_id": int(kic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
+            "dnu":      utils.float_for_json(dnu[i]), 
+            "e_dnu":    utils.float_for_json(e_dnu[i]),  
             "teff":       utils.float_for_json(teff[i]),  
             "e_teff":     utils.float_for_json(e_teff[i]),
         })

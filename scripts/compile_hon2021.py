@@ -26,6 +26,8 @@ OUTPUT   = Path("sources/hon2021.json")
 ADS_URL     = "https://ui.adsabs.harvard.edu/abs/2021ApJ...919..131H"
 TEFF_ADS_URL = None
 
+# Notes: Hon+2021 does not have dnu values.
+
 def main():
     for f in (TABLE1, README):
         if not f.exists():
@@ -64,7 +66,9 @@ def main():
         targets.append({
             "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
-            "e_numax":    utils.float_for_json(e_numax[i]),  
+            "e_numax":    utils.float_for_json(e_numax[i]), 
+            "dnu":        None, 
+            "e_dnu":      None,   
             "teff":       utils.float_for_json(teff[i]),  
             "e_teff":     utils.float_for_json(e_teff[i]),
         })

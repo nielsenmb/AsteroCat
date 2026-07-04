@@ -46,7 +46,7 @@ def main():
     t2["TIC_int"] = np.array([str(v).strip() for v in t2["TIC"]], dtype=int)
 
     merged = join(
-        t1["TIC_int", "numax", "e_numax"],
+        t1["TIC_int", "numax", "e_numax", "Deltanu", "e_Deltanu"],
         t2["TIC_int", "Teff",  "e_Teff"],
         keys="TIC_int", join_type="inner",
     )
@@ -54,12 +54,14 @@ def main():
     tic     = np.array(merged["TIC_int"], dtype=int)
     numax   = np.ma.filled(merged["numax"].data,   np.nan).astype(float)
     e_numax = np.ma.filled(merged["e_numax"].data, np.nan).astype(float)
+    dnu   = np.ma.filled(merged["Deltanu"].data,   np.nan).astype(float)
+    e_dnu = np.ma.filled(merged["e_Deltanu"].data, np.nan).astype(float)
     teff    = np.where(merged["Teff"].mask,   np.nan, merged["Teff"].data.astype(float))
     e_teff  = np.where(merged["e_Teff"].mask, np.nan, merged["e_Teff"].data.astype(float))
     
 
-    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
-    print(f"  {valid.sum()} / {len(merged)} rows with finite non-zero numax")
+    valid = (((np.isfinite(numax) & (numax > 0)) | (np.isfinite(dnu) & (dnu > 0))) & (np.isnan(teff) | (teff > 0)))
+    print(f"  {valid.sum()} / {len(merged)} rows with finite non-zero numax or dnu")
 
     targets = []
     for i in np.where(valid)[0]:
@@ -67,6 +69,8 @@ def main():
             "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
+            "dnu":        utils.float_for_json(dnu[i]), 
+            "e_dnu":      utils.float_for_json(e_dnu[i]),
             "teff":       utils.float_for_json(teff[i]),  
             "e_teff":     utils.float_for_json(e_teff[i]),
         })

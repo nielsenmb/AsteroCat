@@ -32,10 +32,12 @@ def main():
 
     tic   = data["TIC"].astype(int)
     numax = data["numax"].astype(float)
+    dnu = data["Dnu"].astype(float)
+
     teff  = data["Teff"].astype(float)
 
-    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
-    print(f"  {valid.sum()} / {len(data)} rows with finite non-zero numax")
+    valid = (((np.isfinite(numax) & (numax > 0)) | (np.isfinite(dnu) & (dnu > 0))) & (np.isnan(teff) | (teff > 0)))
+    print(f"  {valid.sum()} / {len(data)} rows with finite non-zero numax or dnu")
 
     targets = []
     for i in np.where(valid)[0]:
@@ -43,6 +45,8 @@ def main():
             "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    None,
+            "dnu":        utils.float_for_json(dnu[i]), 
+            "e_dnu":      None,
             "teff":       utils.float_for_json(teff[i]), 
             "e_teff":     None,
         })

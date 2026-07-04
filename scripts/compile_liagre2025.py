@@ -28,14 +28,16 @@ def main():
     table = ascii.read(CATALOG, readme=README, format="cds")
 
     numax = np.array(table["numax"], dtype=float)
+    dnu = np.array(table["Dnu"], dtype=float)
     teff  = np.array(table["Teff"],  dtype=float)
     tic   = np.array(table["TIC"],   dtype=int)
 
     e_numax = np.array(table["e_numax"], dtype=float) if "e_numax" in table.colnames else np.full(len(table), np.nan)
+    e_dnu = np.array(table["e_Dnu"], dtype=float) if "e_Dnu" in table.colnames else np.full(len(table), np.nan)
     e_teff  = np.array(table["e_Teff"],  dtype=float) if "e_Teff"  in table.colnames else np.full(len(table), np.nan)
 
-    valid = np.isfinite(numax) & (numax > 0) & (teff > 0)
-    print(f"  {valid.sum()} / {len(table)} rows with finite non-zero numax")
+    valid = (((np.isfinite(numax) & (numax > 0)) | (np.isfinite(dnu) & (dnu > 0))) & (np.isnan(teff) | (teff > 0)))
+    print(f"  {valid.sum()} / {len(table)} rows with finite non-zero numax or dnu")
 
     targets = []
     for i in np.where(valid)[0]:
@@ -43,6 +45,8 @@ def main():
             "catalog_id": int(tic[i]),
             "numax":      utils.float_for_json(numax[i]), 
             "e_numax":    utils.float_for_json(e_numax[i]),  
+            "dnu":        utils.float_for_json(dnu[i]), 
+            "e_dnu":      utils.float_for_json(e_dnu[i]),  
             "teff":       utils.float_for_json(teff[i]),  
             "e_teff":     utils.float_for_json(e_teff[i]),
         })

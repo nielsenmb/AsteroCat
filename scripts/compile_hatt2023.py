@@ -25,12 +25,16 @@ from asterocat import utils
 
 warnings.filterwarnings("ignore")
 
-CATALOG_DAT = Path("sources/hatt2023/catalog.dat")
-README      = Path("sources/hatt2023/ReadMe.txt")
-OUTPUT      = Path("sources/hatt2023.json")
-BATCH       = 1000
-ADS_URL     = 'https://ui.adsabs.harvard.edu/abs/2023A%26A...669A..67H'
+
+TABLE        = Path("sources/hatt2023/catalog.dat")
+README       = Path("sources/hatt2023/ReadMe.txt")
+OUTPUT       = Path("sources/hatt2023.json")
+ADS_URL      = 'https://ui.adsabs.harvard.edu/abs/2023A%26A...669A..67H'
 TEFF_ADS_URL = None
+SOURCE       = 'Hatt+2023'
+INSTRUMENT   = 'TESS'
+CATALOG      = 'TIC'
+BATCH        = 1000
 
 def chunks(lst, n):
     for i in range(0, len(lst), n):
@@ -39,9 +43,11 @@ def chunks(lst, n):
 
 def main():
     print("Loading Hatt+2023 catalog...")
-    cat = ascii.read(CATALOG_DAT, readme=README, format="cds")
+    cat = ascii.read(TABLE, readme=README, format="cds")
+     
     cat = cat[np.isfinite(cat["numax"])]
-    print(f"  {len(cat)} stars with finite numax")
+  
+    print(f"  {len(cat)} stars with finite numax or dnu")
 
     tic_ids = cat["TIC"].data.tolist()
 
@@ -58,27 +64,31 @@ def main():
     del tic["ID"]
 
     merged = join(cat, tic["TIC", "Teff", "e_Teff"], keys="TIC", join_type="inner")
-    merged = merged[np.isfinite(merged["Teff"])]
-    print(f"  {len(merged)} stars with both numax and Teff")
+
+    #merged = merged[np.isfinite(merged["Teff"])]
+    print(f"  {len(merged)} stars with both numax, dnu and Teff")
 
 
     targets = []
     for row in merged:
         targets.append({
             "catalog_id": int(row["TIC"]),
-            "numax":      utils.float_for_json(row['numax']), #float(row["numax"])       if np.isfinite(row["numax"])  else None,
+            "numax":      utils.float_for_json(row['numax']), 
             "e_numax":    float(row["e_numax"])     if "e_numax" in merged.colnames and np.isfinite(row["e_numax"]) else None,
+            "dnu":        utils.float_for_json(row['dnu']), 
+            "e_dnu":      float(row["e_dnu"])     if "e_dnu" in merged.colnames and np.isfinite(row["e_dnu"]) else None,
             "teff":       utils.float_for_json(row["Teff"]),
             "e_teff":     utils.float_for_json(row["e_Teff"])
         })
 
     OUTPUT.parent.mkdir(exist_ok=True)
-    payload = {"source": "Hatt+2023", 
-               "catalog":    "TIC",
-               "instrument": "TESS",
+    payload = {"source": SOURCE, 
+               "catalog":    CATALOG,
+               "instrument": INSTRUMENT,
                "ads_url": ADS_URL, 
                "teff_ads_url": TEFF_ADS_URL,
                "targets": targets}
+    
     with open(OUTPUT, "w") as f:
         json.dump(payload, f, indent=2)
 
