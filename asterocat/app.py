@@ -114,8 +114,9 @@ def api_search():
         # e.g. "TIC1234" → "TIC_1234", "TIC_1234" → "TIC_1234", "1234" → reject
         q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
         if re.match(r'^[A-Za-z]+_\d+', q_norm):
-            clauses.append("catalog_id LIKE ?")
-            params.append(f"%{q_norm}%")
+            # Use = for exact match or LIKE only with % wildcards (no _ wildcard issue)
+            clauses.append("catalog_id = ?")
+            params.append(q_norm)
     if sources:
         placeholders = ",".join("?" * len(sources))
         clauses.append(f"source IN ({placeholders})")
@@ -216,8 +217,9 @@ def api_plot_foreground():
     if q:
         q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
         if re.match(r'^[A-Za-z]+_\d+', q_norm):
-            clauses.append("catalog_id LIKE ?")
-            params.append(f"%{q_norm}%")
+            # Use = for exact match or LIKE only with % wildcards (no _ wildcard issue)
+            clauses.append("catalog_id = ?")
+            params.append(q_norm)
     if sources:
         placeholders = ",".join("?" * len(sources))
         clauses.append(f"source IN ({placeholders})")

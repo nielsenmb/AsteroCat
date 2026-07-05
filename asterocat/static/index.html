@@ -428,6 +428,22 @@
     text-decoration: underline; text-underline-offset: 2px;
   }
   .toggle-all-btn:hover { color: var(--accent); }
+
+  /* ── batch upload ── */
+  .upload-label {
+    display: block; padding: 8px 10px;
+    border: 1px dashed var(--border); border-radius: var(--radius);
+    color: var(--muted); font-size: 12px; font-family: var(--font-mono);
+    cursor: pointer; text-align: center; transition: border-color .15s, color .15s;
+  }
+  .upload-label:hover { border-color: var(--accent); color: var(--text); }
+  .upload-label.loaded { border-color: var(--good); color: var(--good); }
+  .batch-warnings {
+    font-size: 12px; font-family: var(--font-mono);
+    display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;
+  }
+  .batch-warn { color: var(--warn); }
+  .batch-err  { color: #f87171; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
@@ -506,6 +522,16 @@
       </div>
     </div>
 
+    <!-- batch upload -->
+    <div>
+      <div class="panel-title">Upload target list</div>
+      <label class="upload-label" for="batch-file-input">
+        <span id="upload-label-text">Choose .txt file…</span>
+        <input type="file" id="batch-file-input" accept=".txt" style="display:none">
+      </label>
+      <button class="btn btn-ghost" id="batch-search-btn" style="width:100%;margin-top:6px" disabled>Search list</button>
+    </div>
+
     <!-- instrument filter -->
     <div class="collapsible">
       <button class="collapse-toggle" aria-expanded="false" onclick="toggleSection(this)">
@@ -541,6 +567,7 @@
       <button class="tab-btn"        id="tab-plot"  onclick="switchTab('plot')">Plot</button>
     </div>
   <main id="table-panel">
+    <div class="batch-warnings" id="batch-warnings"></div>
     <div class="results-meta">
       <span id="result-count" class="count">—</span>
       <span id="result-label">results</span>
@@ -797,6 +824,117 @@ function toggleAll(name) {
   boxes.forEach(b => b.checked = !allChecked);
 }
 
+
+// ── batch file upload ─────────────────────────────────────────────────────────
+let batchIds = [];
+
+$('batch-file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    batchIds = ev.target.result.split('\n')
+      .map(l => l.trim()).filter(Boolean);
+    $('upload-label-text').textContent = `${file.name} (${batchIds.length} targets)`;
+    $('batch-file-input').parentElement.classList.add('loaded');
+    $('batch-search-btn').disabled = false;
+  };
+  reader.readAsText(file);
+});
+
+$('batch-search-btn').addEventListener('click', () => doBatchSearch(batchIds));
+
+async function doBatchSearch(ids) {
+  if (!ids.length) return;
+
+  const warnings = $('batch-warnings');
+  warnings.innerHTML = '';
+
+  // Warn if many free-text names (potential SIMBAD calls)
+  const freeText = ids.filter(id => !/^[A-Za-z]+_?\d+/.test(id));
+  if (freeText.length > 20) {
+    warnings.innerHTML += `<div class="batch-warn">⚠ ${freeText.length} IDs require SIMBAD lookup — this may take a moment.</div>`;
+  }
+
+  $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">Searching ${ids.length} targets…</td></tr>`;
+  $('result-count').textContent = '—';
+  $('export-btn').disabled = true;
+  $('prev-btn').disabled = true;
+  $('next-btn').disabled = true;
+
+  // Fetch each ID
+  const allResults = [];
+  const acatSeen   = new Map();   // acat_id → [ids that resolved to it]
+  const notFound   = [];
+
+  for (const id of ids) {
+    let rows = [];
+    if (/^[A-Za-z]+_?\d+/.test(id)) {
+      // Catalog ID format
+      const q_norm = id.replace(/^([A-Za-z]+)_?(\d+)$/, '$1_$2');
+      const params = new URLSearchParams({ q: q_norm, limit: 200 });
+      const res  = await fetch(`/api/search?${params}`);
+      const data = await res.json();
+      rows = data.results || [];
+    } else {
+      // Alias / free-text
+      const res  = await fetch(`/api/search/alias?q=${encodeURIComponent(id)}`);
+      const data = await res.json();
+      if (data.length) {
+        rows = data;
+      } else {
+        // SIMBAD fallback
+        const sres  = await fetch(`/api/simbad/lookup?q=${encodeURIComponent(id)}`);
+        const sdata = await sres.json();
+        rows = sdata.in_catalog ? sdata.results : [];
+      }
+    }
+
+    if (!rows.length) {
+      notFound.push(id);
+      continue;
+    }
+
+    // Track which input IDs resolve to each ACAT — only flag if two *different* inputs match
+    const acatIdsThisInput = new Set(rows.map(r => r.acat_id).filter(Boolean));
+    for (const acatId of acatIdsThisInput) {
+      if (!acatSeen.has(acatId)) acatSeen.set(acatId, []);
+      if (!acatSeen.get(acatId).includes(id)) acatSeen.get(acatId).push(id);
+    }
+    for (const r of rows) allResults.push(r);
+  }
+
+  // Deduplicate rows by acat_id + source
+  const seen = new Set();
+  const deduped = allResults.filter(r => {
+    const key = `${r.acat_id}|${r.source}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Warnings
+  if (notFound.length) {
+    warnings.innerHTML += `<div class="batch-err">✗ Not found: ${notFound.map(id => `<span style="color:var(--text)">${id}</span>`).join(', ')}</div>`;
+  }
+  const dupes = [...acatSeen.entries()].filter(([, v]) => v.length > 1);
+  if (dupes.length) {
+    const msgs = dupes.map(([acat, ids]) => `${acat} ← ${ids.join(', ')}`);
+    warnings.innerHTML += `<div class="batch-warn">⚠ Duplicate targets: ${msgs.join(' | ')}</div>`;
+  }
+
+  $('result-count').textContent = deduped.length;
+  $('result-label').textContent = 'results';
+  $('export-btn').disabled = deduped.length === 0;
+
+  if (!deduped.length) {
+    $('results-body').innerHTML = `<tr><td colspan="11" class="state-msg">No results found.</td></tr>`;
+    return;
+  }
+
+  renderResults({ total: deduped.length, limit: deduped.length, offset: 0, results: deduped });
+}
+
 // ── load sources on startup ──────────────────────────────────────────────────
 async function loadSources() {
   const res  = await fetch('/api/sources');
@@ -988,7 +1126,7 @@ function renderResults(data) {
     return `<tr class="result-row${selClass}" data-key="${rowKey}" onclick="toggleRowFromClick(event, this)">
       <td class="cb-col"><input type="checkbox" class="row-cb" ${checked} onclick="toggleRow(event, this)"></td>
       <td class="id-cell"><a href="#" class="acat-link" data-id="${r.acat_id}" onclick="openModal(event,this)">${r.acat_id ?? '—'}</a></td>
-      <td class="id-cell">${r.catalog_id.includes('_') ? r.catalog_id.split('_').slice(1).join('_') : r.catalog_id}</td>
+      <td class="id-cell">${(()=>{ const STRIP=['Common name','Bayer','Flamsteed']; return STRIP.includes(r.catalog) ? r.catalog_id.split('_').slice(1).join('_') : r.catalog_id.replace('_',''); })()}</td>
       <td class="source-cell">
         <span class="source-dot" style="background:${color};display:inline-block;
               width:7px;height:7px;border-radius:50%;margin-right:6px"></span>${r.source}${adsLink(r.ads_url)}
