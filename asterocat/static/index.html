@@ -302,7 +302,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    width: min(860px, 95vw);
+    width: min(1100px, 95vw);
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -444,6 +444,45 @@
   }
   .batch-warn { color: var(--warn); }
   .batch-err  { color: #f87171; }
+
+  /* ── modal summary row ── */
+  tr.summary-row td {
+    border-top: 2px solid var(--border);
+    padding-top: 10px;
+    color: var(--accent2);
+    font-style: italic;
+  }
+  tr.summary-row td.num-cell { color: var(--accent2); }
+
+  /* ── tooltips ── */
+  .tooltip-wrap { position: relative; display: inline-flex; align-items: center; }
+  .tooltip-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid var(--muted); color: var(--muted);
+    font-size: 9px; font-weight: 700; cursor: help;
+    margin-left: 5px; flex-shrink: 0; line-height: 1;
+    transition: border-color .15s, color .15s;
+  }
+  .tooltip-icon:hover { border-color: var(--accent); color: var(--accent); }
+  .tooltip-icon:hover + .tooltip-box,
+  .tooltip-icon:focus + .tooltip-box { display: block; }
+  .tooltip-box {
+    display: none;
+    position: absolute;
+    left: 20px; top: -4px;
+    width: 220px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-size: 11px;
+    font-family: var(--font-ui);
+    color: var(--text);
+    line-height: 1.5;
+    z-index: 200;
+    pointer-events: none;
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 </head>
@@ -459,7 +498,10 @@
 
     <!-- ID search -->
     <div>
-      <div class="panel-title">Target ID</div>
+      <div style="display:flex;align-items:center">
+        <div class="panel-title" style="margin-bottom:0">Target ID</div>
+        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box">Search by catalog ID — e.g. TIC1234, KIC5678, EPIC9876, HD12345.<br><br>For common or Bayer names (e.g. "Procyon A", "alpha Cen A"), the catalog is checked first, then SIMBAD is queried live if no match is found.</span></span>
+      </div>
       <div class="search-wrap">
         <input id="q-input" type="text" placeholder="TIC1234  /  KIC5678  /  HD1234  /  alf Cen A">
       </div>
@@ -524,7 +566,10 @@
 
     <!-- batch upload -->
     <div>
-      <div class="panel-title">Upload target list</div>
+      <div style="display:flex;align-items:center">
+        <div class="panel-title" style="margin-bottom:0">Upload target list</div>
+        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box">Plain text file (.txt), one target per line. Accepts any format supported by the single target search — TIC, KIC, HD numbers, or common names.<br><br>A warning is shown if two entries resolve to the same star.</span></span>
+      </div>
       <label class="upload-label" for="batch-file-input">
         <span id="upload-label-text">Choose .txt file…</span>
         <input type="file" id="batch-file-input" accept=".txt" style="display:none">
@@ -574,7 +619,10 @@
       <span id="active-filters" class="filter-tags"></span>
       <div class="export-row" style="margin-left:auto">
         <span class="selected-count" id="selected-count"></span>
+        <span class="tooltip-wrap">
         <button class="btn-primary-outline" id="export-selected-btn" disabled>Export selected</button>
+        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box" style="left:auto;right:0">Exports only the rows you have checked. Selection persists across pages — you can tick rows on page 1, navigate to page 2, and export both together.</span></span>
+      </span>
         <button class="btn btn-ghost" id="export-btn" disabled>Export all</button>
       </div>
     </div>
@@ -645,7 +693,10 @@
           <option value="source">Source</option>
         </select>
       </div>
-      <button class="btn-primary-outline" id="plot-btn" style="margin-left:auto">Plot</button>
+      <span class="tooltip-wrap" style="margin-left:auto">
+        <button class="btn-primary-outline" id="plot-btn">Plot</button>
+        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box" style="left:auto;right:0">Grey background points are a random sample of up to 10,000 DB entries. Coloured foreground points reflect your current search filters.<br><br>Drag a rectangle on the plot to select points and export them.</span></span>
+      </span>
     </div>
     <div id="plot-wrap"><svg id="plot-svg"></svg></div>
     <div class="plot-legend" id="plot-legend"></div>
@@ -667,6 +718,7 @@ let sourceColorMap = {};
 function instrument(r) { return r.instrument || r.catalog || '—'; }
 // ── state ────────────────────────────────────────────────────────────────────
 let state = { offset: 0, limit: 200, total: 0 };
+let batchAcatIds = [];  // ACAT IDs from last batch search, empty = use normal filters
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -722,6 +774,38 @@ async function openModal(evt, el) {
     return;
   }
 
+  // Weighted average: w_i = 1/σ_i², fallback σ = 0.1 * value
+  function weightedStats(vals, errs) {
+    const pairs = vals.map((v, i) => [v, errs[i]]).filter(([v]) => v != null);
+    if (!pairs.length) return null;
+    const ws = pairs.map(([v, e]) => { const s = e ?? 0.1*Math.abs(v); return 1/(s*s); });
+    const wSum = ws.reduce((a,b) => a+b, 0);
+    const mean = pairs.reduce((a,[v],i) => a + ws[i]*v, 0) / wSum;
+    const sigma = 1 / Math.sqrt(wSum);
+    return { mean, sigma };
+  }
+
+  const numaxStats = weightedStats(rows.map(r=>r.numax),   rows.map(r=>r.e_numax));
+  const dnuStats   = weightedStats(rows.map(r=>r.dnu),     rows.map(r=>r.e_dnu));
+  const teffStats  = weightedStats(rows.map(r=>r.teff),    rows.map(r=>r.e_teff));
+
+  function fmtMean(s, dp, round=false) {
+    if (!s) return '<td class="num-cell null-cell">—</td>';
+    const val = round ? Math.round(s.mean) : s.mean.toFixed(dp);
+    return `<td class="num-cell">${val}</td>`;
+  }
+
+  const summaryRow = `<tr class="summary-row">
+    <td colspan="3" style="color:var(--accent2);font-style:italic">
+      Weighted mean
+      <span class="tooltip-icon" style="vertical-align:middle" tabindex="0">?<span class="tooltip-box">Weighted mean of all measurements, where each value is weighted by 1/σ². For entries without an uncertainty, σ = 10% of the value is assumed.<br><br>Indicative only — do not use for scientific analysis.</span></span>
+    </td>
+    ${fmtMean(numaxStats, 2)}<td class="num-cell null-cell">—</td>
+    ${fmtMean(dnuStats,   2)}<td class="num-cell null-cell">—</td>
+    ${fmtMean(teffStats,  0, true)}<td class="num-cell null-cell">—</td>
+    <td></td>
+  </tr>`;
+
   $('modal-body').innerHTML = rows.map(r => {
     const color = sourceColorMap[r.source] || '#888';
     return `<tr>
@@ -739,7 +823,7 @@ async function openModal(evt, el) {
       ${fmtCell(r.e_teff, 1)}
       <td>${adsLink(r.teff_ads_url)}</td>
     </tr>`;
-  }).join('');
+  }).join('') + summaryRow;
 }
 
 function closeModal(evt) {
@@ -932,6 +1016,8 @@ async function doBatchSearch(ids) {
     return;
   }
 
+  batchAcatIds = [...new Set(deduped.map(r => r.acat_id).filter(Boolean))];
+  window._plotDrawn = false;  // force plot refresh
   renderResults({ total: deduped.length, limit: deduped.length, offset: 0, results: deduped });
 }
 
@@ -1165,6 +1251,7 @@ function updateFilterTags() {
 
 // ── search ───────────────────────────────────────────────────────────────────
 async function doSearch(offset=0) {
+  batchAcatIds = [];  // clear batch filter when doing a normal search
   updateFilterTags();
   // If query doesn't match catalog-id format, try alias search instead
   const rawQ = $('q-input').value.trim();
@@ -1332,6 +1419,7 @@ async function drawPlot() {
   const params = buildParams(0);
   params.set('x_col', xCol);
   params.set('y_col', yCol);
+  if (batchAcatIds.length) params.set('acat_ids', batchAcatIds.join(','));
   const r2 = await fetch(`/api/plot/foreground?${params}`);
   fgData   = await r2.json();
 
@@ -1574,6 +1662,8 @@ document.getElementById('plot-btn').addEventListener('click', () => {
             <th>Instrument</th>
             <th style="text-align:right">numax (muHz)</th>
             <th style="text-align:right">e_numax (muHz)</th>
+            <th style="text-align:right">dnu (muHz)</th>
+            <th style="text-align:right">e_dnu (muHz)</th>
             <th style="text-align:right">Teff (K)</th>
             <th style="text-align:right">e_Teff (K)</th>
           </tr>

@@ -113,8 +113,14 @@ def normalise_catalog(raw: str) -> str:
     return CATALOG_ALIASES.get(raw.lower(), raw)
 
 def make_catalog_id(catalog: str, raw_id) -> str:
-    """Build the catalog_id string, e.g. 'TIC_12345' or 'Bayer_alfCenA'."""
-    return f"{catalog}_{raw_id}"
+    """Build the catalog_id string, e.g. 'TIC_12345' or 'Bayer_alfCenA'.
+    Strips accidental catalog prefix from raw_id (e.g. HD+'HD12345' → 'HD_12345').
+    """
+    raw = str(raw_id)
+    # Strip leading catalog prefix if already present (case-insensitive)
+    if raw.upper().startswith(catalog.upper()):
+        raw = raw[len(catalog):].lstrip()
+    return f"{catalog}_{raw}"
 
 # ---------------------------------------------------------------------------
 # JSON hashing

@@ -88,6 +88,7 @@ def api_search():
     q            = request.args.get("q", "").strip()
     sources      = [s.strip() for s in request.args.get("source", "").split(",") if s.strip()]
     instruments  = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
+    acat_ids     = [a.strip() for a in request.args.get("acat_ids",   "").split(",") if a.strip()]
     numax_min = request.args.get("numax_min", type=float)
     numax_max = request.args.get("numax_max", type=float)
     teff_min  = request.args.get("teff_min",  type=float)
@@ -125,6 +126,10 @@ def api_search():
         placeholders = ",".join("?" * len(instruments))
         clauses.append(f"instrument IN ({placeholders})")
         params += instruments
+    if acat_ids:
+        placeholders = ",".join("?" * len(acat_ids))
+        clauses.append(f"acat_id IN ({placeholders})")
+        params += acat_ids
     if numax_min is not None:
         clauses.append("numax >= ?");  params.append(numax_min)
     if numax_max is not None:
@@ -195,6 +200,7 @@ def api_plot_foreground():
     q           = request.args.get("q", "").strip()
     sources     = [s.strip() for s in request.args.get("source",     "").split(",") if s.strip()]
     instruments = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
+    acat_ids    = [a.strip() for a in request.args.get("acat_ids",   "").split(",") if a.strip()]
     numax_min   = request.args.get("numax_min", type=float)
     numax_max   = request.args.get("numax_max", type=float)
     teff_min    = request.args.get("teff_min",  type=float)
@@ -228,6 +234,10 @@ def api_plot_foreground():
         placeholders = ",".join("?" * len(instruments))
         clauses.append(f"instrument IN ({placeholders})")
         params += instruments
+    if acat_ids:
+        placeholders = ",".join("?" * len(acat_ids))
+        clauses.append(f"acat_id IN ({placeholders})")
+        params += acat_ids
     if numax_min is not None:
         clauses.append("numax >= ?");  params.append(numax_min)
     if numax_max is not None:

@@ -23,7 +23,7 @@ epsilon Tau,Bayer,56,,5,,,,,,,,WIRE,0
 eta Boo,Bayer,730,,39.9,0.1,Carrier+2005,https://ui.adsabs.harvard.edu/abs/2005A%26A...434.1085C,6030,90,Carrier+2005,https://ui.adsabs.harvard.edu/abs/2005A%26A...434.1085C,Various ground based,1
 eta Boo,Bayer,739,,40.4,0.1,Kjeldsen+2003,https://ui.adsabs.harvard.edu/abs/2003AJ....126.1483K,,,,,Various ground based,1
 gamma Cep,Bayer,190.1,0.7,15,,Knudstrup+2023,https://ui.adsabs.harvard.edu/abs/2023A%26A...675A.197K,4764,122,Mortier+2013,https://ui.adsabs.harvard.edu/abs/2013A%26A...557A..70M,SONG,1
-gamma Cep,Bayer,185,9,14.28,0.58,Malla+2020,https://ui.adsabs.harvard.edu/abs/2020MNRAS.496.5423M/,4764,122,Mortier+2013,https://ui.adsabs.harvard.edu/abs/2013A%26A...557A..70M,,1
+gamma Cep,Bayer,185,9,14.28,0.58,Malla+2020,https://ui.adsabs.harvard.edu/abs/2020MNRAS.496.5423M/,4764,122,Mortier+2013,https://ui.adsabs.harvard.edu/abs/2013A%26A...557A..70M,SONG,1
 gamma Psc,Bayer,32,,4.1,0.1,Beck+2015,https://ui.adsabs.harvard.edu/abs/2015A%26A...573A.138B,4940,,Hekker+2007,https://ui.adsabs.harvard.edu/abs/2007A%26A...475.1003H,Various ground and space based,1
 gamma Ser,Bayer,1600,,90,,Kjeldsen+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...682.1370K,6285,13,Soubiran+2022,https://ui.adsabs.harvard.edu/abs/2022A%26A...663A...4S,Various ground based,1
 HD131977,HD,,,,,,,,,,,,0
