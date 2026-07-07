@@ -9,6 +9,27 @@ import numpy as np
 import warnings
 from astropy.io import ascii
 from astropy.units import UnitsWarning
+import json
+
+def write_json(output, source, catalog, instrument,
+               ads_url, teff_ads_url, targets):
+    output.parent.mkdir(exist_ok=True)
+
+    with open(output, "w") as f:
+        json.dump(
+            {
+                "source": source,
+                "catalog": catalog,
+                "instrument": instrument,
+                "ads_url": ads_url,
+                "teff_ads_url": teff_ads_url,
+                "targets": targets,
+            },
+            f,
+            indent=2,
+        )
+
+    print(f"Written {output} ({len(targets)} entries)")
 
 def read_cds(table, readme):
     """Read a CDS table while suppressing harmless unit warnings."""

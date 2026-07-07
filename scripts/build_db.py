@@ -192,7 +192,12 @@ def resolve_via_mast(catalog: str, ids: list,
     if catalog == "KIC":
         int_ids = [int(i) for i in ids]
         n_batches = -(-len(int_ids) // MAST_BATCH)
-        for b, chunk in enumerate(_chunks(int_ids, MAST_BATCH)):
+        try:
+            from tqdm import tqdm
+            batch_iter = tqdm(list(_chunks(int_ids, MAST_BATCH)), desc="  KIC→TIC", unit="batch")
+        except ImportError:
+            batch_iter = _chunks(int_ids, MAST_BATCH)
+        for b, chunk in enumerate(batch_iter):
             log.info(f"  MAST KIC batch {b+1}/{n_batches} ({len(chunk)} IDs)...")
             try:
                 t = Catalogs.query_criteria(catalog="Tic", KIC=chunk)
@@ -211,20 +216,61 @@ def resolve_via_mast(catalog: str, ids: list,
         return result
 
     if catalog == "EPIC":
-        log.info(f"  MAST EPIC: querying {len(ids)} IDs by target name (slow)...")
-        for i in ids:
-            cid = make_catalog_id("EPIC", i)
-            target_name = f"ktwo{int(i):09d}"
+        from astroquery.mast import Observations
+        EPIC_BATCH = 500
+        int_ids    = [int(i) for i in ids]
+        n_batches  = -(-len(int_ids) // EPIC_BATCH)
+        log.info(f"  MAST EPIC: {len(int_ids)} IDs in {n_batches} batches of {EPIC_BATCH}...")
+
+        try:
+            from tqdm import tqdm
+            batch_iter = tqdm(range(n_batches), desc='  EPIC→TIC', unit='batch')
+        except ImportError:
+            batch_iter = range(n_batches)
+
+        for b in batch_iter:
+            chunk    = int_ids[b*EPIC_BATCH:(b+1)*EPIC_BATCH]
+            names    = [f"ktwo{i:09d}" for i in chunk]
+            name_map = {f"ktwo{i:09d}": i for i in chunk}
             try:
-                t = Catalogs.query_object(target_name, catalog="TIC", radius=0.0003)
-                if t is None or len(t) == 0:
-                    log.warning(f"UNRESOLVED: {cid} — no TIC match for {target_name}")
-                    result[cid] = None
-                else:
-                    result[cid] = make_catalog_id("TIC", int(t["ID"][0]))
+                obs = Observations.query_criteria(
+                    target_name=names,
+                    obs_collection="K2",
+                    dataproduct_type="timeseries",
+                )
+                if obs is None or len(obs) == 0:
+                    for i in chunk:
+                        cid = make_catalog_id("EPIC", i)
+                        if cid not in result:
+                            result[cid] = None
+                    continue
+
+                # obs has target_name like 'ktwo201121245' and
+                # sequence_number gives the TIC cross-match via query_criteria on TIC
+                # but the obs table doesn't have TIC IDs directly.
+                # Fall back to TIC cone search for matched targets only.
+                matched_names = set(str(r['target_name']).strip().lower() for r in obs)
+                for i in chunk:
+                    cid  = make_catalog_id("EPIC", i)
+                    name = f"ktwo{i:09d}"
+                    if name not in matched_names:
+                        log.warning(f"UNRESOLVED: {cid} — not found in K2 observations")
+                        result[cid] = None
+                        continue
+                    try:
+                        t = Catalogs.query_object(name, catalog="TIC", radius=0.0003)
+                        if t is None or len(t) == 0:
+                            log.warning(f"UNRESOLVED: {cid} — no TIC cone match")
+                            result[cid] = None
+                        else:
+                            result[cid] = make_catalog_id("TIC", int(t["ID"][0]))
+                    except Exception as exc:
+                        log.error(f"  TIC cone search failed for {name}: {exc}")
+                        result[cid] = None
             except Exception as exc:
-                log.error(f"  MAST EPIC query failed for {target_name}: {exc}")
-                result[cid] = None
+                log.error(f"  MAST EPIC batch {b+1} failed: {exc}")
+                for i in chunk:
+                    result.setdefault(make_catalog_id("EPIC", i), None)
         return result
 
     return {}

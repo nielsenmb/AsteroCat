@@ -455,7 +455,7 @@
   tr.summary-row td.num-cell { color: var(--accent2); }
 
   /* ── tooltips ── */
-  .tooltip-wrap { position: relative; display: inline-flex; align-items: center; }
+  .tooltip-wrap { display: inline-flex; align-items: center; }
   .tooltip-icon {
     display: inline-flex; align-items: center; justify-content: center;
     width: 14px; height: 14px; border-radius: 50%;
@@ -465,12 +465,9 @@
     transition: border-color .15s, color .15s;
   }
   .tooltip-icon:hover { border-color: var(--accent); color: var(--accent); }
-  .tooltip-icon:hover + .tooltip-box,
-  .tooltip-icon:focus + .tooltip-box { display: block; }
-  .tooltip-box {
+  #tooltip-popup {
     display: none;
-    position: absolute;
-    left: 20px; top: -4px;
+    position: fixed;
     width: 220px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -480,7 +477,7 @@
     font-family: var(--font-ui);
     color: var(--text);
     line-height: 1.5;
-    z-index: 200;
+    z-index: 9999;
     pointer-events: none;
   }
 </style>
@@ -500,7 +497,7 @@
     <div>
       <div style="display:flex;align-items:center">
         <div class="panel-title" style="margin-bottom:0">Target ID</div>
-        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box">Search by catalog ID — e.g. TIC1234, KIC5678, EPIC9876, HD12345.<br><br>For common or Bayer names (e.g. "Procyon A", "alpha Cen A"), the catalog is checked first, then SIMBAD is queried live if no match is found.</span></span>
+        <span class="tooltip-icon" data-tip="Search by catalog ID — e.g. TIC1234, KIC5678, EPIC9876, HD12345.<br><br>For common or Bayer names (e.g. &quot;Procyon A&quot;, &quot;alpha Cen A&quot;), the catalog is checked first, then SIMBAD is queried live if no match is found." tabindex="0">?</span>
       </div>
       <div class="search-wrap">
         <input id="q-input" type="text" placeholder="TIC1234  /  KIC5678  /  HD1234  /  alf Cen A">
@@ -568,7 +565,7 @@
     <div>
       <div style="display:flex;align-items:center">
         <div class="panel-title" style="margin-bottom:0">Upload target list</div>
-        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box">Plain text file (.txt), one target per line. Accepts any format supported by the single target search — TIC, KIC, HD numbers, or common names.<br><br>A warning is shown if two entries resolve to the same star.</span></span>
+        <span class="tooltip-icon" data-tip="Plain text file (.txt), one target per line. Accepts any format supported by the single target search — TIC, KIC, HD numbers, or common names.<br><br>A warning is shown if two entries resolve to the same star." tabindex="0">?</span>
       </div>
       <label class="upload-label" for="batch-file-input">
         <span id="upload-label-text">Choose .txt file…</span>
@@ -621,7 +618,7 @@
         <span class="selected-count" id="selected-count"></span>
         <span class="tooltip-wrap">
         <button class="btn-primary-outline" id="export-selected-btn" disabled>Export selected</button>
-        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box" style="left:auto;right:0">Exports only the rows you have checked. Selection persists across pages — you can tick rows on page 1, navigate to page 2, and export both together.</span></span>
+        <span class="tooltip-icon" data-tip="Exports only the rows you have checked. Selection persists across pages — you can tick rows on page 1, navigate to page 2, and export both together." tabindex="0">?</span>
       </span>
         <button class="btn btn-ghost" id="export-btn" disabled>Export all</button>
       </div>
@@ -695,7 +692,7 @@
       </div>
       <span class="tooltip-wrap" style="margin-left:auto">
         <button class="btn-primary-outline" id="plot-btn">Plot</button>
-        <span class="tooltip-icon" tabindex="0">?<span class="tooltip-box" style="left:auto;right:0">Grey background points are a random sample of up to 10,000 DB entries. Coloured foreground points reflect your current search filters.<br><br>Drag a rectangle on the plot to select points and export them.</span></span>
+        <span class="tooltip-icon" data-tip="Grey background points are a random sample of up to 10,000 DB entries. Coloured foreground points reflect your current search filters.<br><br>Drag a rectangle on the plot to select points and export them." tabindex="0">?</span>
       </span>
     </div>
     <div id="plot-wrap"><svg id="plot-svg"></svg></div>
@@ -798,7 +795,7 @@ async function openModal(evt, el) {
   const summaryRow = `<tr class="summary-row">
     <td colspan="3" style="color:var(--accent2);font-style:italic">
       Weighted mean
-      <span class="tooltip-icon" style="vertical-align:middle" tabindex="0">?<span class="tooltip-box">Weighted mean of all measurements, where each value is weighted by 1/σ². For entries without an uncertainty, σ = 10% of the value is assumed.<br><br>Indicative only — do not use for scientific analysis.</span></span>
+      <span class="tooltip-icon" data-tip="Weighted mean of all measurements, where each value is weighted by 1/σ². For entries without an uncertainty, σ = 10% of the value is assumed.<br><br>Indicative only — do not use for scientific analysis." style="vertical-align:middle" tabindex="0">?</span>
     </td>
     ${fmtMean(numaxStats, 2)}<td class="num-cell null-cell">—</td>
     ${fmtMean(dnuStats,   2)}<td class="num-cell null-cell">—</td>
@@ -1020,6 +1017,30 @@ async function doBatchSearch(ids) {
   window._plotDrawn = false;  // force plot refresh
   renderResults({ total: deduped.length, limit: deduped.length, offset: 0, results: deduped });
 }
+
+
+// ── tooltips ─────────────────────────────────────────────────────────────────
+(function() {
+  const popup = document.getElementById('tooltip-popup');
+  document.addEventListener('mouseover', e => {
+    const icon = e.target.closest('.tooltip-icon');
+    if (!icon) return;
+    const text = icon.dataset.tip;
+    if (!text) return;
+    popup.innerHTML = text;
+    popup.style.display = 'block';
+  });
+  document.addEventListener('mousemove', e => {
+    if (popup.style.display === 'none') return;
+    const x = e.clientX + 14, y = e.clientY + 14;
+    const pw = popup.offsetWidth, ph = popup.offsetHeight;
+    popup.style.left = (x + pw > window.innerWidth  ? e.clientX - pw - 4 : x) + 'px';
+    popup.style.top  = (y + ph > window.innerHeight ? e.clientY - ph - 4 : y) + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('.tooltip-icon')) popup.style.display = 'none';
+  });
+})();
 
 // ── load sources on startup ──────────────────────────────────────────────────
 async function loadSources() {
@@ -1699,5 +1720,6 @@ document.getElementById('plot-btn').addEventListener('click', () => {
   </div>
 </div>
 
+<div id="tooltip-popup"></div>
 </body>
 </html>

@@ -4,6 +4,7 @@
 import json
 from pathlib import Path
 from asterocat import utils
+import numpy as np
 
 TABLE        = "https://cdsarc.cds.unistra.fr/ftp/J/ApJS/276/69/table4.dat.gz"
 README       = "https://cdsarc.cds.unistra.fr/ftp/J/ApJS/276/69/ReadMe"
@@ -20,6 +21,11 @@ def main():
     table = utils.read_cds(TABLE, README)
 
     cat_id = table["KIC"]
+
+    for col in ['Numax', 'e_Numax', 'DNu', 'e_DNu', 'Teff', 'e_Teff']:
+        data = table[col]
+        mask = (data < 0) | ~np.isfinite(data)
+        table[col][mask] = np.nan
 
     numax = utils.get_parameter(table, "numax")
     e_numax = utils.get_parameter(table, "e_numax")
