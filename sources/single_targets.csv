@@ -39,3 +39,16 @@ tau Cet,Bayer,4490,,169.6,0.2,Teixeira+2009,https://ui.adsabs.harvard.edu/abs/20
 theta1 Tau,Bayer,90,,6.9,0.2,Beck+2015,https://ui.adsabs.harvard.edu/abs/2015A%26A...573A.138B,5000,,Hekker+2007,https://ui.adsabs.harvard.edu/abs/2007A%26A...475.1003H,Various ground and space based,1
 xi Hya,Bayer,87,,7.1,,Frandsen+2002,https://ui.adsabs.harvard.edu/abs/2002A%26A...394L...5F,5000,,,,CORALIE@LET,1
 18 Sco,Flamsteed,3000,,134.4,0.3,Bazot+2011,https://ui.adsabs.harvard.edu/abs/2011A%26A...526L...4B,5785,12,Soubiran+2022,https://ui.adsabs.harvard.edu/abs/2022A%26A...663A...4S,HARPS@ESO3.6m,1
+Procyon A,Common name,902,,,,Brown+2021,https://ui.adsabs.harvard.edu/abs/1991ApJ...368..599B,,,,,FOE@KPNO,
+HD41047,,1.99,0.27,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,3846,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD120477,,2.61,0.63,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,3920,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD73155,,3.39,0.99,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4245,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD5848,,16.3,0.15,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4549,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD161892,,19.7,0.22,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4538,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD143787,,23.3,0.16,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4390,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD70514,,24.7,0.28,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4515,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD153210,,34.8,0.25,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4635,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD39425,,34.8,0.53,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4678,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD163588,,35.9,0.2,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4445,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+HD71878,,51.1,0.39,,,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,4546,100,Stello+2008,https://ui.adsabs.harvard.edu/abs/2008ApJ...674L..53S,WIRE,
+beta Aql,Bayer,,,,,,,5030,,Bruntt+2010,,,
