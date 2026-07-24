@@ -18,7 +18,7 @@ import json
 import pandas as pd
 from pathlib import Path
 
-INPUT = Path("sources/single_targets/single_targets.csv")
+INPUT = Path("sources/single_targets.csv")
 
 def main():
     print("Loading single_targets.csv...")

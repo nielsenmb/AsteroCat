@@ -24,7 +24,7 @@ import os
 SCRIPTS_DIR = Path(__file__).parent
 
 # Ordered list of compile scripts. Add new sources here.
-COMPILE_SCRIPTS = glob.glob(os.path.join(*[SCRIPTS_DIR, 'source_scripts/compile_*.py']))
+COMPILE_SCRIPTS = glob.glob(os.path.join(*[SCRIPTS_DIR, 'compile_scripts/compile_*.py']))
 
 
 def run_script(script: Path, label: str) -> bool:
