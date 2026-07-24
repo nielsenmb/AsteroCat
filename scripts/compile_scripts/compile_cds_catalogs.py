@@ -1,4 +1,4 @@
-"""Compile the CDS catalogs defined in ``sources/cds_catalogs.csv``."""
+"""Compile CDS catalogs defined in ``sources/cds_catalogs.csv``."""
 
 from __future__ import annotations
 
@@ -30,11 +30,11 @@ REQUIRED_FIELDS = (
     "source",
     "catalog",
     "instrument",
-    "numax_table_url",
-    "dnu_table_url",
-    "teff_table_url",
     "readme_url",
     "id_column",
+)
+REQUIRED_COLUMNS = REQUIRED_FIELDS + tuple(
+    f"{group}_table_url" for group in PARAMETER_GROUPS
 )
 
 
@@ -45,9 +45,9 @@ class CatalogConfig:
     source: str
     catalog: str
     instrument: str
-    numax_table_url: str
-    dnu_table_url: str
-    teff_table_url: str
+    numax_table_url: str | None
+    dnu_table_url: str | None
+    teff_table_url: str | None
     readme_url: str
     ads_url: str | None
     teff_ads_url: str | None
@@ -66,6 +66,11 @@ class CatalogConfig:
         if missing:
             fields = ", ".join(missing)
             raise ValueError(f"Catalog row {row_number} is missing required fields: {fields}")
+
+        if not any(_optional(row.get(f"{group}_table_url")) for group in PARAMETER_GROUPS):
+            raise ValueError(
+                f"Catalog row {row_number} must define at least one parameter table URL"
+            )
 
         values = {
             name: _optional(row.get(name))
@@ -87,7 +92,7 @@ class CatalogConfig:
     def column_for(self, parameter: str) -> str | None:
         return getattr(self, f"{parameter}_column")
 
-    def table_url_for(self, group: str) -> str:
+    def table_url_for(self, group: str) -> str | None:
         return getattr(self, f"{group}_table_url")
 
 
@@ -106,7 +111,7 @@ def load_catalogs(path: Path) -> list[CatalogConfig]:
             raise ValueError(f"Catalog configuration is empty: {path}")
 
         known_fields = set(CatalogConfig.__dataclass_fields__)
-        missing_columns = set(REQUIRED_FIELDS) - set(reader.fieldnames)
+        missing_columns = set(REQUIRED_COLUMNS) - set(reader.fieldnames)
         if missing_columns:
             fields = ", ".join(sorted(missing_columns))
             raise ValueError(f"Catalog configuration is missing columns: {fields}")
@@ -212,6 +217,8 @@ def _merge_parameters(
     by_url: dict[str, list[tuple[str, Table]]] = {}
     for group in PARAMETER_GROUPS:
         url = config.table_url_for(group)
+        if url is None:
+            continue
         parameter_table = _parameter_table(config, group, tables[group])
         by_url.setdefault(url, []).append((group, parameter_table))
 
@@ -244,13 +251,18 @@ def compile_catalog(
     """Compile one configured CDS catalog and return its JSON path."""
     print(f"Loading {config.source} from CDS...")
     tables = {
-        group: reader(config.table_url_for(group), config.readme_url)
+        group: reader(url, config.readme_url)
         for group in PARAMETER_GROUPS
+        if (url := config.table_url_for(group)) is not None
     }
     table = _merge_parameters(config, tables)
 
     parameters = {
-        name: np.asarray(table[name], dtype=float)
+        name: (
+            np.asarray(table[name], dtype=float)
+            if name in table.colnames
+            else np.full(len(table), np.nan)
+        )
         for name in PARAMETERS
     }
     valid = utils.std_input_validation(
