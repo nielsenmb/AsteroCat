@@ -1,5 +1,11 @@
 # AsteroCat
 
+> **New database layout branch:** the browser now reads the remote-compatible
+> `aarchive` MySQL schema. See [setup and usage](docs/mysql-setup.md) for importing
+> a local dump, configuring read-only access, and running tests. The compilation
+> workflow below describes the legacy SQLite catalogue and remains available
+> for source ingestion; its `catalog.db` does not drive this branch's browser.
+
 A local browser-based catalog for aggregating, cross-matching, and searching asteroseismic measurements across publications. AsteroCat compiles results from multiple sources into a single searchable database, resolves target identities across missions (Kepler/K2/TESS) and ground-based programs via MAST and SIMBAD, and provides a browser UI for searching, filtering, and exporting.
 
 ## Installation
@@ -20,7 +26,7 @@ Or with plain pip:
 pip install -e .
 ```
 
-## Workflow
+## Legacy source compilation workflow
 
 ### 1. Compile a source
 
@@ -94,21 +100,18 @@ Summarises conflicts, unresolved IDs, and applied overrides. To write stub entri
 python scripts/parse_build_log.py --write-overrides
 ```
 
-### 4. Browse
+### 4. Browse the new archive
+
+The browser on this branch reads the `aarchive` MySQL database. Follow the
+[local import and connection instructions](docs/mysql-setup.md), then run:
 
 ```bash
-asterocat
+asterocat --mysql-host 127.0.0.1 --mysql-user asterocat --database aarchive
 ```
 
-Opens `http://localhost:5000` in a new browser tab.
-
-**Options:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--db` | `./catalog.db` | Path to database |
-| `--port` | `5000` | Server port |
-| `--no-browser` | off | Don't open a tab automatically |
+Set `ASTEROCAT_MYSQL_PASSWORD` in your environment. The browser opens at
+`http://localhost:5000`. Use `--mysql-port`, `--port` or `--no-browser` as needed.
+The legacy SQLite build above remains a separate source-ingestion workflow.
 
 ## Adding a new source
 

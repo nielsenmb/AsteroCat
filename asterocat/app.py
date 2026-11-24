@@ -1,388 +1,413 @@
-"""
-asterocat/app.py
-----------------
-Local Flask server for the asteroseismic catalog browser.
-
-Installed as the `asterocat` console script via pyproject.toml.
-
-Usage (after pip install):
-    asterocat [--db PATH] [--port PORT]
-
-Usage (dev):
-    python -m asterocat.app [--db PATH] [--port PORT]
-"""
+"""Flask interface and CLI for the read-only aarchive catalogue browser."""
 
 import argparse
-import sqlite3
+import csv
+import io
+import logging
+import os
 import threading
 import webbrowser
 from pathlib import Path
 
-import re
+import pymysql
 from flask import Flask, g, jsonify, request, send_from_directory
+from werkzeug.exceptions import HTTPException
 
-# Static files live next to this module inside the installed package.
+from .database import Archive, EXPORT_COLUMNS, connect, parse_filters
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = Flask(__name__, static_folder=str(STATIC_DIR))
-app.config["DB_PATH"] = ""   # set at startup
 
+def mysql_config():
+    """Read connection settings from the environment.
 
-# ---------------------------------------------------------------------------
-# DB helpers
-# ---------------------------------------------------------------------------
-
-def get_db():
-    if "db" not in g:
-        g.db = sqlite3.connect(app.config["DB_PATH"])
-        g.db.row_factory = sqlite3.Row
-    return g.db
-
-
-@app.teardown_appcontext
-def close_db(exc=None):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
-
-@app.get("/")
-def index():
-    return send_from_directory(STATIC_DIR, "index.html")
-
-
-@app.get("/api/sources")
-def api_sources():
-    """Return list of loaded sources and their row counts."""
-    db = get_db()
-    rows = db.execute(
-        "SELECT source, catalog, instrument, COUNT(*) as n "
-        "FROM targets GROUP BY source, catalog, instrument ORDER BY source"
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.get("/api/search")
-def api_search():
+    Returns
+    -------
+    dict
+        PyMySQL arguments. Credentials never enter browser responses.
     """
-    Query parameters (all optional):
-        q          -- match on catalog_id; must include mission prefix (e.g. TIC1234, KIC5678)
-        source     -- comma-separated source names to include
-        numax_min  -- float
-        numax_max  -- float
-        teff_min   -- float
-        teff_max   -- float
-        dnu_min    -- float
-        dnu_max    -- float
-        limit      -- int (default 200, max 1000)
-        offset     -- int (default 0)
-        sort_col   -- column to sort by (default: acat_id)
-        sort_dir   -- 'asc' or 'desc' (default: asc)
+    config = {
+        "host": os.environ.get("ASTEROCAT_MYSQL_HOST", "127.0.0.1"),
+        "port": int(os.environ.get("ASTEROCAT_MYSQL_PORT", "3306")),
+        "user": os.environ.get("ASTEROCAT_MYSQL_USER", "asterocat"),
+        "password": os.environ.get("ASTEROCAT_MYSQL_PASSWORD", ""),
+        "database": os.environ.get("ASTEROCAT_MYSQL_DATABASE", "aarchive"),
+        "connect_timeout": 10, "read_timeout": 120, "write_timeout": 30,
+    }
+    if os.environ.get("ASTEROCAT_MYSQL_SSL_CA"):
+        config.update(ssl_ca=os.environ["ASTEROCAT_MYSQL_SSL_CA"],
+                      ssl_verify_cert=True, ssl_verify_identity=True)
+    return config
+
+
+def get_archive():
+    """Get the archive connection for the current request.
+
+    Returns
+    -------
+    Archive
+        Data-access object backed by a read-only MySQL session.
     """
-    db = get_db()
-
-    q            = request.args.get("q", "").strip()
-    sources      = [s.strip() for s in request.args.get("source", "").split(",") if s.strip()]
-    instruments  = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
-    acat_ids     = [a.strip() for a in request.args.get("acat_ids",   "").split(",") if a.strip()]
-    numax_min = request.args.get("numax_min", type=float)
-    numax_max = request.args.get("numax_max", type=float)
-    teff_min  = request.args.get("teff_min",  type=float)
-    teff_max  = request.args.get("teff_max",  type=float)
-    dnu_min   = request.args.get("dnu_min",   type=float)
-    dnu_max   = request.args.get("dnu_max",   type=float)
-    limit     = min(request.args.get("limit",  default=200, type=int), 1000)
-    offset    = request.args.get("offset", default=0, type=int)
-    sort_col  = request.args.get("sort_col", "acat_id")
-    sort_dir  = request.args.get("sort_dir", "asc").lower()
-
-    # Whitelist sortable columns to prevent SQL injection
-    SORTABLE = {"acat_id", "catalog_id", "catalog", "instrument", "source",
-                "numax", "e_numax", "teff", "e_teff", "dnu", "e_dnu"}
-    if sort_col not in SORTABLE:
-        sort_col = "acat_id"
-    if sort_dir not in ("asc", "desc"):
-        sort_dir = "asc"
-
-    clauses, params = [], []
-
-    if q:
-        # Normalise input: insert _ after mission prefix if absent
-        # e.g. "TIC1234" → "TIC_1234", "TIC_1234" → "TIC_1234", "1234" → reject
-        q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
-        if re.match(r'^[A-Za-z]+_\d+', q_norm):
-            # Use = for exact match or LIKE only with % wildcards (no _ wildcard issue)
-            clauses.append("catalog_id = ?")
-            params.append(q_norm)
-    if sources:
-        placeholders = ",".join("?" * len(sources))
-        clauses.append(f"source IN ({placeholders})")
-        params += sources
-    if instruments:
-        placeholders = ",".join("?" * len(instruments))
-        clauses.append(f"instrument IN ({placeholders})")
-        params += instruments
-    if acat_ids:
-        placeholders = ",".join("?" * len(acat_ids))
-        clauses.append(f"acat_id IN ({placeholders})")
-        params += acat_ids
-    if numax_min is not None:
-        clauses.append("numax >= ?");  params.append(numax_min)
-    if numax_max is not None:
-        clauses.append("numax <= ?");  params.append(numax_max)
-    if teff_min is not None:
-        clauses.append("teff >= ?");   params.append(teff_min)
-    if teff_max is not None:
-        clauses.append("teff <= ?");   params.append(teff_max)
-    if dnu_min is not None:
-        clauses.append("dnu >= ?");    params.append(dnu_min)
-    if dnu_max is not None:
-        clauses.append("dnu <= ?");    params.append(dnu_max)
-
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-
-    total = db.execute(
-        f"SELECT COUNT(*) FROM targets {where}", params
-    ).fetchone()[0]
-
-    rows = db.execute(
-        f"SELECT acat_id, catalog_id, catalog, instrument, source,"
-        f"       ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu "
-        f"FROM targets {where} "
-        f"ORDER BY {sort_col} {sort_dir.upper()}, acat_id "
-        f"LIMIT ? OFFSET ?",
-        params + [limit, offset],
-    ).fetchall()
-
-    return jsonify({"total": total, "limit": limit, "offset": offset,
-                    "results": [dict(r) for r in rows]})
+    from flask import current_app
+    if "archive" not in g:
+        g.archive = Archive(connect(current_app.config["MYSQL"]))
+    return g.archive
 
 
+def arguments():
+    """Read a JSON object or query parameters.
 
-@app.get("/api/acat/<acat_id>")
-def api_acat(acat_id):
-    db = get_db()
-    rows = db.execute(
-        "SELECT acat_id, catalog_id, catalog, instrument, source, "
-        "       ads_url, teff_ads_url, numax, e_numax, teff, e_teff, dnu, e_dnu "
-        "FROM targets WHERE acat_id = ? "
-        "ORDER BY source",
-        (acat_id,),
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-
-@app.get("/api/plot/background")
-def api_plot_background():
-    """Return up to 10k randomly sampled rows for the plot background."""
-    db   = get_db()
-    n    = request.args.get("n", default=10000, type=int)
-    rows = db.execute(
-        "SELECT acat_id, catalog_id, catalog, instrument, numax, teff, dnu "
-        "FROM targets "
-        "WHERE numax IS NOT NULL AND teff IS NOT NULL "
-        "ORDER BY RANDOM() LIMIT ?",
-        (n,),
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-@app.get("/api/plot/foreground")
-def api_plot_foreground():
-    """Return search-filtered rows for the plot foreground (same filters as /api/search)."""
-    db = get_db()
-
-    q           = request.args.get("q", "").strip()
-    sources     = [s.strip() for s in request.args.get("source",     "").split(",") if s.strip()]
-    instruments = [i.strip() for i in request.args.get("instrument", "").split(",") if i.strip()]
-    acat_ids    = [a.strip() for a in request.args.get("acat_ids",   "").split(",") if a.strip()]
-    numax_min   = request.args.get("numax_min", type=float)
-    numax_max   = request.args.get("numax_max", type=float)
-    teff_min    = request.args.get("teff_min",  type=float)
-    teff_max    = request.args.get("teff_max",  type=float)
-
-    dnu_min     = request.args.get("dnu_min",   type=float)
-    dnu_max     = request.args.get("dnu_max",   type=float)
-    x_col       = request.args.get("x_col", "teff")
-    y_col       = request.args.get("y_col", "numax")
-
-    # Whitelist plot columns
-    PLOT_COLS = {"numax", "teff", "dnu"}
-    if x_col not in PLOT_COLS: x_col = "teff"
-    if y_col not in PLOT_COLS: y_col = "numax"
-
-    clauses, params = [], []
-    # Only require the selected axes to be non-null
-    clauses.append(f"{x_col} IS NOT NULL AND {y_col} IS NOT NULL")
-
-    if q:
-        q_norm = re.sub(r'^([A-Za-z]+)_?(\d+)$', r'\1_\2', q.strip())
-        if re.match(r'^[A-Za-z]+_\d+', q_norm):
-            # Use = for exact match or LIKE only with % wildcards (no _ wildcard issue)
-            clauses.append("catalog_id = ?")
-            params.append(q_norm)
-    if sources:
-        placeholders = ",".join("?" * len(sources))
-        clauses.append(f"source IN ({placeholders})")
-        params += sources
-    if instruments:
-        placeholders = ",".join("?" * len(instruments))
-        clauses.append(f"instrument IN ({placeholders})")
-        params += instruments
-    if acat_ids:
-        placeholders = ",".join("?" * len(acat_ids))
-        clauses.append(f"acat_id IN ({placeholders})")
-        params += acat_ids
-    if numax_min is not None:
-        clauses.append("numax >= ?");  params.append(numax_min)
-    if numax_max is not None:
-        clauses.append("numax <= ?");  params.append(numax_max)
-    if teff_min is not None:
-        clauses.append("teff >= ?");   params.append(teff_min)
-    if teff_max is not None:
-        clauses.append("teff <= ?");   params.append(teff_max)
-    if dnu_min is not None:
-        clauses.append("dnu >= ?");    params.append(dnu_min)
-    if dnu_max is not None:
-        clauses.append("dnu <= ?");    params.append(dnu_max)
-
-    where = "WHERE " + " AND ".join(clauses)
-    rows  = db.execute(
-        f"SELECT acat_id, catalog_id, catalog, instrument, source, ads_url, teff_ads_url, numax, teff, dnu "
-        f"FROM targets {where} ORDER BY acat_id",
-        params,
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
-
-
-
-@app.get("/api/search/alias")
-def api_search_alias():
+    Returns
+    -------
+    dict or MultiDict
+        Request arguments.
     """
-    Search the aliases table for a free-text identifier (e.g. "HD 12345",
-    "alf Cen A"). Returns matching acat_ids and their target rows.
+    args = request.get_json() if request.method == "POST" else request.args
+    if not isinstance(args, dict):
+        raise ValueError("Request body must be a JSON object.")
+    return args
+
+
+def integer(args, key, default, minimum, maximum):
+    """Validate an integer request parameter.
+
+    Parameters
+    ----------
+    args : Mapping
+        Input arguments.
+    key : str
+        Parameter name.
+    default, minimum, maximum : int
+        Default and inclusive bounds.
+
+    Returns
+    -------
+    int
+        Validated value.
     """
-    db    = get_db()
-    query = request.args.get("q", "").strip()
-    if not query:
-        return jsonify([])
-
-    # Try exact match first, then prefix match
-    rows = db.execute(
-        "SELECT t.acat_id, t.catalog_id, t.catalog, t.instrument, t.source, "
-        "       t.ads_url, t.teff_ads_url, t.numax, t.e_numax, t.teff, t.e_teff, "
-        "       a.alias "
-        "FROM aliases a JOIN targets t ON a.acat_id = t.acat_id "
-        "WHERE a.alias LIKE ? "
-        "ORDER BY t.catalog_id, t.source "
-        "LIMIT 200",
-        (f"%{query}%",),
-    ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    raw = args.get(key, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{key} must be an integer.") from exc
+    if str(value) != str(raw) or not minimum <= value <= maximum:
+        raise ValueError(f"{key} must be an integer between {minimum} and {maximum}.")
+    return value
 
 
+def simbad_ids(name):
+    """Resolve a name through the optional live SIMBAD service.
 
-@app.get("/api/simbad/lookup")
-def api_simbad_lookup():
-    """
-    Live SIMBAD lookup for a free-text identifier.
-    Returns {found: bool, main_id: str, in_catalog: bool, acat_ids: [...]}
+    Parameters
+    ----------
+    name : str
+        Target name.
+
+    Returns
+    -------
+    list of str
+        Identifiers returned by SIMBAD.
     """
     from astroquery.simbad import Simbad
-    query = request.args.get("q", "").strip()
-    if not query:
-        return jsonify({"found": False})
-
-    try:
-        escaped = query.replace("'", "''")
-        tap = Simbad.query_tap(
-            f"SELECT b.main_id, ids.ids "
-            f"FROM ident i "
-            f"JOIN basic b ON i.oidref = b.oid "
-            f"JOIN ids ON b.oid = ids.oidref "
-            f"WHERE i.id = '{escaped}'"
-        )
-        if tap is None or len(tap) == 0:
-            return jsonify({"found": False})
-
-        main_id = str(tap["main_id"][0]).strip()
-        raw_ids = str(tap["ids"][0]).split("|")
-        all_ids = [a.strip() for a in raw_ids if a.strip() and a.strip() != "--"]
-
-        # Normalise to catalog_id format (e.g. "TIC 317019578" → "TIC_317019578")
-        def norm(a):
-            parts = a.split()
-            if len(parts) == 2 and parts[1].replace(".", "").isdigit():
-                return f"{parts[0]}_{parts[1]}"
-            return a
-        normalised = list({norm(a) for a in all_ids} | set(all_ids))
-
-        db = get_db()
-        placeholders = ",".join("?" * len(normalised))
-        rows = db.execute(
-            f"SELECT DISTINCT t.acat_id, t.catalog_id, t.catalog, t.instrument, "
-            f"       t.source, t.ads_url, t.teff_ads_url, t.numax, t.e_numax, "
-            f"       t.teff, t.e_teff, t.dnu, t.e_dnu "
-            f"FROM aliases a JOIN targets t ON a.acat_id = t.acat_id "
-            f"WHERE a.alias IN ({placeholders}) "
-            f"ORDER BY t.catalog_id, t.source LIMIT 200",
-            normalised,
-        ).fetchall() if normalised else []
-
-        return jsonify({
-            "found":      True,
-            "main_id":    main_id,
-            "in_catalog": len(rows) > 0,
-            "results":    [dict(r) for r in rows],
-        })
-    except Exception as exc:
-        return jsonify({"found": False, "error": str(exc)})
+    client = Simbad()
+    client.TIMEOUT = 15
+    table = client.query_objectids(name)
+    if table is None:
+        return []
+    column = "id" if "id" in table.colnames else "ID"
+    return [str(value).strip() for value in table[column] if str(value).strip()]
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
+def create_app(config=None):
+    """Create the browser application.
+
+    Parameters
+    ----------
+    config : dict, optional
+        Flask configuration overrides, including MYSQL connection settings.
+
+    Returns
+    -------
+    Flask
+        Application with search, detail, plot, resolution and export routes.
+    """
+    app = Flask(__name__, static_folder=str(STATIC_DIR))
+    app.config.update(MYSQL=mysql_config(), MAX_CONTENT_LENGTH=1024 * 1024)
+    if config:
+        app.config.update(config)
+
+    @app.teardown_appcontext
+    def close_db(exc=None):
+        """Close the request connection and its read transaction.
+
+        Parameters
+        ----------
+        exc : Exception, optional
+            Request error, if any.
+        """
+        archive = g.pop("archive", None)
+        if archive is not None:
+            archive.connection.close()
+
+    @app.errorhandler(ValueError)
+    def invalid_request(exc):
+        """Return a readable validation error.
+
+        Parameters
+        ----------
+        exc : ValueError
+            Invalid input.
+
+        Returns
+        -------
+        tuple
+            JSON response and HTTP status.
+        """
+        return jsonify(error=str(exc)), 400
+
+    @app.errorhandler(pymysql.MySQLError)
+    def database_error(exc):
+        """Report database failures without exposing connection details.
+
+        Parameters
+        ----------
+        exc : pymysql.MySQLError
+            Database failure.
+
+        Returns
+        -------
+        tuple
+            JSON response and HTTP status.
+        """
+        app.logger.exception("Archive query failed")
+        return jsonify(error="Database unavailable or query failed. Check the server log."), 503
+
+    @app.errorhandler(HTTPException)
+    def http_error(exc):
+        """Return JSON for API-level HTTP errors.
+
+        Parameters
+        ----------
+        exc : HTTPException
+            HTTP failure.
+
+        Returns
+        -------
+        tuple
+            JSON response and HTTP status.
+        """
+        return jsonify(error=exc.description), exc.code
+
+    @app.get("/")
+    def index():
+        """Serve the browser interface.
+
+        Returns
+        -------
+        Response
+            HTML document.
+        """
+        return send_from_directory(STATIC_DIR, "index.html")
+
+    @app.get("/api/sources")
+    def sources():
+        """List publication counts.
+
+        Returns
+        -------
+        Response
+            JSON publication list.
+        """
+        return jsonify(get_archive().sources())
+
+    @app.route("/api/search", methods=["GET", "POST"])
+    def search():
+        """Search measurement sets with shared name and range filters.
+
+        Returns
+        -------
+        Response
+            Paginated JSON records.
+        """
+        args = arguments()
+        filters = parse_filters(args)
+        limit = integer(args, "limit", 200, 1, 1000)
+        offset = integer(args, "offset", 0, 0, 10000000)
+        return jsonify(get_archive().search(filters, limit, offset))
+
+    @app.get("/api/target/<path:cid>")
+    def target(cid):
+        """Return target details including observables and individual modes.
+
+        Parameters
+        ----------
+        cid : str
+            Common target identifier.
+
+        Returns
+        -------
+        Response
+            Target detail JSON.
+        """
+        return jsonify(get_archive().details(cid))
+
+    @app.post("/api/resolve")
+    def resolve():
+        """Resolve a target list without broadening an empty result to all stars.
+
+        Returns
+        -------
+        Response
+            Resolved CIDs, unmatched names and duplicate aliases.
+        """
+        args = arguments()
+        names = args.get("names", [])
+        if not isinstance(names, list) or not 1 <= len(names) <= 500:
+            raise ValueError("Provide between 1 and 500 target names.")
+        if any(not isinstance(n, str) or not n.strip() or len(n) > 200 for n in names):
+            raise ValueError("Target names must be nonempty strings of at most 200 characters.")
+        if args.get("online", False) not in (True, False):
+            raise ValueError("online must be a boolean.")
+        archive = get_archive()
+        mapping, missing, errors = {}, [], []
+        for name in dict.fromkeys(names):
+            cids = archive.resolve(name)
+            if not cids and args.get("online", False):
+                try:
+                    ids = simbad_ids(name)
+                    variants = set(ids)
+                    if variants:
+                        placeholders = ",".join(["%s"] * len(variants))
+                        found = archive.rows("SELECT DISTINCT CID FROM cids WHERE ID IN "
+                                             f"({placeholders})", sorted(variants))
+                        cids = [row["CID"] for row in found if row["CID"]]
+                except Exception:
+                    app.logger.warning("SIMBAD lookup failed", exc_info=True)
+                    errors.append(name)
+            if not cids:
+                missing.append(name)
+            for cid in cids:
+                mapping.setdefault(cid, []).append(name)
+        if len(mapping) > 2000:
+            raise ValueError("List resolves to more than 2000 targets; split it into smaller lists.")
+        return jsonify(cids=sorted(mapping), missing=missing, lookup_errors=errors,
+                       duplicates={cid: ns for cid, ns in mapping.items() if len(ns) > 1})
+
+    @app.route("/api/plot/<layer>", methods=["GET", "POST"])
+    def plot(layer):
+        """Return plot records with the same filters and provenance as the table.
+
+        Parameters
+        ----------
+        layer : str
+            Either background or foreground.
+
+        Returns
+        -------
+        Response
+            Paginated plot records; the foreground can be fetched in full.
+        """
+        args = arguments()
+        axes = [args.get("x_col", "numax"), args.get("y_col", "dnu")]
+        if any(axis not in ("numax", "dnu") for axis in axes):
+            raise ValueError("Plot axes must be numax or dnu; Teff is unavailable.")
+        if layer == "background":
+            limit = integer(args, "limit", 10000, 1, 10000)
+            return jsonify(get_archive().search({}, limit, axes=axes, random=True))
+        if layer != "foreground":
+            raise ValueError("Unknown plot layer.")
+        filters = parse_filters(args)
+        limit = integer(args, "limit", 10000, 1, 10000)
+        offset = integer(args, "offset", 0, 0, 10000000)
+        return jsonify(get_archive().search(filters, limit, offset, axes=axes))
+
+    @app.post("/api/export")
+    def export():
+        """Stream every matching measurement set as quoted CSV.
+
+        Returns
+        -------
+        Response
+            CSV download with the same filtering and ordering as the table.
+        """
+        filters = parse_filters(arguments())
+        archive = get_archive()
+        sql, params = archive.query(filters)
+        cursor = archive.connection.cursor(pymysql.cursors.SSDictCursor)
+        cursor.execute(sql + " ORDER BY " + archive.order(filters), params)
+        # The response outlives Flask's request teardown; it owns this connection.
+        g.pop("archive")
+
+        def close_export():
+            """Release the export connection, including an unconsumed response.
+
+            Returns
+            -------
+            None
+                Closes the connection if it is still open.
+            """
+            if archive.connection.open:
+                try:
+                    cursor.close()
+                finally:
+                    archive.connection.close()
+
+        def generate():
+            """Yield CSV chunks without retaining the complete result in memory.
+
+            Yields
+            ------
+            str
+                Header or batches of CSV records.
+            """
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=EXPORT_COLUMNS, extrasaction="ignore")
+            writer.writeheader()
+            try:
+                yield output.getvalue()
+                while rows := cursor.fetchmany(1000):
+                    output.seek(0)
+                    output.truncate()
+                    writer.writerows(rows)
+                    yield output.getvalue()
+            finally:
+                close_export()
+
+        response = app.response_class(generate(), mimetype="text/csv", headers={
+            "Content-Disposition": 'attachment; filename="asterocat_results.csv"'})
+        response.call_on_close(close_export)
+        return response
+
+    return app
+
+
+app = create_app()
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        prog="asterocat",
-        description="AsteroCat — asteroseismic catalog browser",
-    )
-    parser.add_argument(
-        "--db",
-        default=str(Path.cwd() / "catalog.db"),
-        help="Path to catalog.db (default: ./catalog.db)",
-    )
-    parser.add_argument(
-        "--port", default=5000, type=int,
-        help="Port for the local web server (default: 5000)",
-    )
-    parser.add_argument(
-        "--no-browser", action="store_true",
-        help="Don't open a browser tab automatically",
-    )
+    """Launch the local browser connected to a local or remote MySQL database.
+
+    Returns
+    -------
+    None
+        Runs the Flask server until interrupted.
+    """
+    parser = argparse.ArgumentParser(description="AsteroCat aarchive browser")
+    parser.add_argument("--mysql-host", default=app.config["MYSQL"]["host"])
+    parser.add_argument("--mysql-port", type=int, default=app.config["MYSQL"]["port"])
+    parser.add_argument("--mysql-user", default=app.config["MYSQL"]["user"])
+    parser.add_argument("--database", default=app.config["MYSQL"]["database"])
+    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
-
-    db_path = Path(args.db)
-    if not db_path.exists():
-        parser.error(
-            f"Database not found: {db_path}\n"
-            "Run `python scripts/build_db.py` first to build it."
-        )
-
-    app.config["DB_PATH"] = str(db_path)
-
+    app.config["MYSQL"].update(host=args.mysql_host, port=args.mysql_port,
+                               user=args.mysql_user, database=args.database)
+    logging.basicConfig(level=logging.INFO)
     if not args.no_browser:
-        threading.Timer(1.0, webbrowser.open_new_tab,
+        threading.Timer(1, webbrowser.open_new_tab,
                         args=[f"http://localhost:{args.port}"]).start()
-
-    print(f"AsteroCat  |  db: {db_path}  |  http://localhost:{args.port}")
-    app.run(port=args.port, debug=False)
+    app.run(host="127.0.0.1", port=args.port, debug=False)
 
 
 if __name__ == "__main__":

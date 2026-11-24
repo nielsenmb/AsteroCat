@@ -14,7 +14,11 @@ dependencies = [
     "astropy>=5.3",
     "astroquery>=0.4.7",
     "tqdm>=4.60",
+    "pymysql[rsa]>=1.1",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [project.scripts]
 asterocat = "asterocat.app:main"

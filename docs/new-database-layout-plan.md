@@ -1,146 +1,87 @@
 # AsteroCat: migration to the aarchive database
 
-Status: planning; application implementation has not started.
+Status: local implementation complete; remote verification pending.
 Branch: `new-database-layout`
-Baseline: `main` at `ddd5441accb94b234283fac539d87ce2908799b6`
+Original baseline: `main` at `ddd5441accb94b234283fac539d87ce2908799b6`
 Date: 2026-11-24
 
-## Goal and first milestone
+## Agreed scope
 
-Preserve the existing browser workflow while reading the new database layout.
-Start with target-name/identifier lookup and numax/dnu range searches against a
-local MySQL 8 instance populated from the supplied partial dump. The first
-milestone is a usable search table with uncertainties, publication and pipeline
-references, sorting, pagination, and CSV export.
+- Keep target-name/identifier searches, numax/dnu ranges, source selection,
+  sorting, pagination, target details, target-list upload, plots and CSV exports.
+- Combined numax/dnu filters must match measurements from the same star,
+  publication and pipeline. Each displayed set is keyed by `(CID, bibcode, pipeline)`.
+- Standardize frequency values and uncertainties to ASCII `uHz`, including numeric
+  conversion from `nHz`. Preserve `-1` before conversion.
+- Keep numeric missing properties as `-1` in the API and exports. Show a dash in
+  tables and exclude missing values from filters, plots and weighted summaries.
+  Preserve signed mode orders. Revisit the storage convention later.
+- Keep Teff and its uncertainty as unavailable placeholders, with disabled
+  temperature controls. No temperature data source is connected yet.
+- Omit observing-instrument columns, filtering and plot coloring for now.
+- Use **Amplitude** as the label and preserve the original values and unit
+  metadata. Harmonizing amplitude definitions remains deferred.
+- Keep pipeline and measurement-publication references separate, including when
+  their bibcodes happen to match. Empty pipeline entries remain unknown.
+- Use SELECT-only database access. No hosted schema changes are required.
 
-Remote access can be configured and verified when the server becomes available.
-The local application should use the same read-only query path intended for the
-remote database. Import/setup privileges are separate from runtime permissions.
+## Implementation
 
-## Decisions agreed with Martin
+`asterocat/database.py` contains name resolution, measurement-set queries,
+frequency normalization and complete target details for the six-table schema.
+`asterocat/app.py` serves the Flask API, CSV streaming and CLI configuration.
+`asterocat/static/index.html` and `app.js` retain the browser table/plot workflow.
+See [setup and usage](mysql-setup.md) for local import and connection settings.
 
-- Standardize frequency-like values and their uncertainties to ASCII `uHz` in
-  the application. Treat `μHz` and `uHz` as equivalent; convert `nHz` numerically
-  where applicable. Period spacings remain in seconds and inclinations in degrees.
-- Preserve missing-property sentinels as `-1`. Recognize missing values before
-  unit conversion so `-1 nHz` does not become `-0.001 uHz`. Exclude designated
-  missing values from numerical filters, plots and summary calculations.
-  Sentinel handling must be field-specific: do not reject all negative values
-  globally, especially radial orders. Revisit the storage convention later.
-- Use the label **Amplitude**. Defer reconciling amplitude definitions and units.
-  Retain the original values and unit metadata without conversion or imposing a
-  common physical unit.
-- Keep `pipeline` and publication `bibcode` as separate references, including
-  when they happen to contain the same code. Blank pipeline entries stay unknown.
-- Remote access is read-only; the initial implementation must not require
-  creating tables, views, indexes or stored procedures on the hosted database.
-
-## Current implementation and schema mapping
-
-The existing Flask routes in `asterocat/app.py` query a local SQLite `targets`
-table with numax, dnu and teff columns, plus an `aliases` table. The browser in
-`asterocat/static/index.html` provides identifier and name searches, target-list
-upload, source/instrument filters, ranges, sorting, pagination, selection,
-CSV export, target details with weighted summaries, plots and SIMBAD fallback.
-
-| Current concept | New source |
+| Concept | New source |
 | --- | --- |
-| Shared target identity, currently ACAT ID | `CID` |
+| Shared target identity | `CID` |
 | Alternate names and catalogue identifiers | `cids.ID → cids.CID` |
 | numax and its uncertainty | `p`, `Obsname = 'νmax'`, `value/err` |
 | dnu and its uncertainty | `p`, `Obsname = 'Δν'`, `value/err` |
 | Measurement publication | `bibcode` |
 | Analysis pipeline reference | `pipeline` |
-| Other acoustic, gravity, mixed, rotation/magnetic quantities | `p/g/mixed/rotmag` |
+| Other seismic observables | `p/g/mixed/rotmag` |
 | Individual mode properties | `modes` |
-| Temperature and observing instrument | No dedicated fields in the supplied schema |
+| Temperature | `-1` placeholder |
 
-Measurements are unique by `(CID, Obsname, pipeline, bibcode)`. A natural
-displayed measurement-set key is `(CID, pipeline, bibcode)`. Preserve that
-identity in selection, export, target detail and plotting to avoid merging
-different analyses. Resolve aliases without multiplying rows by the number of
-names attached to a star.
+Exact name variants are tried first, followed by literal substring matching.
+Aliases resolve to CIDs before measurement filtering, avoiding multiplied rows.
+SIMBAD remains an optional fallback. Names and target lists use the same range
+filters as ordinary searches. Empty resolved lists and empty publication
+selections return no matches.
 
-## Staged implementation
+Unfiltered searches include measurement sets from every seismic table, including
+sets with no numax/dnu. A range or plot axis requires its observable to be present.
+Those searches join the relevant `p` rows on CID, publication and pipeline using
+the existing primary key. MySQL 8 window counts avoid evaluating the full query
+separately for the result total on normal pages.
 
-### 1. Local database and query layer
+## Validation
 
-- Import the supplied dump into an isolated local MySQL 8 database. Keep the dump,
-  database files and credentials outside git.
-- Add a small Python data-access module and configurable MySQL connection.
-  Keep database credentials on the Flask side.
-- Implement parameterized identifier lookup through `cids`, direct CID lookup,
-  and numax/dnu filtering through `p`.
-- Assemble values and uncertainties by measurement-set identity. Preserve
-  partially populated sets and expose available observables without inventing
-  values for quantities absent from the dump.
-- Normalize frequency units consistently for filters, returned values,
-  uncertainties, sort order, plot axes and exports.
-- Use ordinary SELECT queries initially. Measure their performance against the
-  supplied dataset with its existing indexes.
+- MySQL integration fixtures exercise provenance pairing, aliases, partial sets,
+  unit conversion, missing sentinels, source filters, stable pagination, read-only
+  sessions and agreement between table, plot and export endpoints.
+- JavaScript DOM interaction tests exercise the real Flask/MySQL path: selection
+  across pages, target details, batch deduplication, source filtering, plot box
+  selection and downloads. A separate opt-in Chromium test is provided.
+- The supplied partial dump is used for representative searches and performance
+  checks with a SELECT-only application account. Dump data and credentials are
+  excluded from git.
 
-### 2. First usable search interface
+## Earlier MySQL concern and remaining work
 
-- Connect the existing table and search controls to the query layer.
-- Support name/alias lookup, numax-only, dnu-only, combined ranges, and names
-  combined with ranges.
-- Display publication and pipeline separately, with bibliographic links when
-  present; preserve uncertainty columns.
-- Keep sorting, stable pagination, target details, row selection and CSV export.
-  Ensure displayed, selected and exported records use the same filters and keys.
-- Use the supplied aliases before the existing optional SIMBAD fallback.
-- Keep the familiar layout. Temperature and instrument controls need an explicit
-  unavailable state until their metadata source is agreed; full parity remains
-  an open requirement rather than silently inferring instruments from IDs.
-
-### 3. Restore remaining workflows
-
-- Adapt target-list upload, plot background/foreground, box selection and exports
-  to CID and measurement-set keys.
-- Start plots with available quantities such as numax versus dnu.
-- Adapt existing weighted summaries to missing values and missing uncertainties,
-  ensuring aliases do not cause duplicate measurements to be counted.
-- Complete temperature/instrument-dependent features once their source is known.
-- Map other seismic observables and mode properties through the same query layer
-  when extending the first search milestone; amplitude harmonization stays deferred.
-
-### 4. Remote verification
-
-- Confirm how the Flask host may connect to MySQL when the server returns;
-  phpMyAdmin access alone does not establish direct MySQL connectivity.
-- Switch connection configuration and test with read-only credentials.
-- Compare identifier searches, ranges, pagination and exports against known
-  local cases where the remote contents overlap.
-- Measure remote latency and query plans. Add application-side caching or request
-  host-managed indexes only if measurements justify that subsequent work.
-
-## Earlier MySQL concern
-
-The October discussion concerned materialized views: precomputed, stored query
-results that can accelerate repeated searches. MySQL 8.0 does not provide native
-materialized views. This does not prevent implementing name and range searches
-with ordinary queries. Read-only access also means server-side schema changes
-cannot be assumed.
-
+The October discussion concerned materialized views: stored, precomputed query
+results that can accelerate searches. MySQL 8.0 has no native materialized views.
+Ordinary queries implement the required searches without them.
 Reference: https://dev.mysql.com/doc/refman/8.0/en/faqs-views.html
 
-The supplied measurement-table primary keys begin with CID. Broad searches by
-observable/value may therefore need substantial scanning. Measure this before
-choosing an optimization or asking for additional indexes.
+When the remote server is available, confirm its supported connection/tunnel,
+configure read-only credentials and verified TLS where appropriate, and compare
+known results and performance. phpMyAdmin access alone does not establish direct
+MySQL connectivity. Broad unfiltered searches still aggregate the archive, so
+remote performance remains to be measured before choosing caching or asking the
+host for additional indexes.
 
-## Open decisions and validation
-
-- Combined numax/dnu filtering: ask whether both must match within the same
-  publication and pipeline, or may match different measurements for one star.
-  The former is the proposed starting behavior because it most closely matches
-  the existing row-based search. This is pending user confirmation.
-- Identify the source for temperatures and observing instruments before claiming
-  full feature parity.
-- Validate aliases including spaces, alternate catalogue formats, and 2MASS IDs;
-  a literal missing name must not return an unfiltered catalogue.
-- Test missing observables, repeated publications/pipelines, boundary values,
-  equivalent frequency units and `-1` sentinels.
-- Verify combined-filter semantics once agreed, stable pagination without alias
-  duplication, and consistent table/detail/plot/export results.
-- Run integration checks on MySQL 8; SQLite-only checks cannot establish remote
-  SQL compatibility.
+Future data decisions are the Teff source, missing-value storage convention and
+amplitude definitions. Observing-instrument functionality is deferred.

@@ -13,6 +13,10 @@ env/
 
 # AsteroCat runtime files (generated locally, not committed)
 catalog.db
+*.sql
+*.sql.gz
+.env
+.pytest_cache/
 sources/*.json
 sources/json/*.json
 build.log
@@ -25,3 +29,6 @@ build.log
 
 # OS
 .DS_Store
+
+# Frontend test dependencies
+node_modules/
